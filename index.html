@@ -43,7 +43,7 @@ svg{width:100%;height:100%;display:block;touch-action:none;user-select:none;back
   <button id="fit">Ajustar vista</button>
   <span style="flex:1"></span>
   <button id="save">Guardar JSON</button><button id="load">Abrir JSON</button>
-  <button id="png">Exportar PNG</button><button id="clear">Vaciar</button>
+  <button id="png">Exportar PNG</button><button id="reset">Plano inicial</button><button id="clear">Vaciar</button>
   <input id="file" type="file" accept=".json" hidden>
 </header>
 <aside id="lib"></aside>
@@ -54,7 +54,7 @@ svg{width:100%;height:100%;display:block;touch-action:none;user-select:none;back
 "use strict";
 const $ = s => document.querySelector(s);
 const NS = "http://www.w3.org/2000/svg";
-const KEY = "diseno_habitacion_v1";
+const KEY = "diseno_habitacion_v2";
 
 // Catálogo (cm): w = ancho, d = fondo
 const CAT = {
@@ -62,7 +62,7 @@ const CAT = {
   "Estudio":[["Escritorio 140",140,60],["Escritorio 120",120,60],["Silla",45,45],["Estantería",80,30],["Librería 2m",200,30],["Mesa de trabajo",160,80]],
   "Salón":[["Sofá 2 plazas",160,90],["Sofá 3 plazas",210,90],["Mueble TV",150,40],["Mesa centro",100,50],["Butaca",80,80],["Mesa comedor",160,90]],
   "Aperturas":[["Puerta 72",72,10,"door"],["Puerta 82",82,10,"door"],["Puerta 92",92,10,"door"],["Ventana 100",100,12,"window"],["Ventana 150",150,12,"window"]],
-  "Otros":[["Radiador",80,10],["Alfombra 160x230",160,230],["Pilar",30,30],["Bloque libre",100,100]]
+  "Otros":[["Texto (rótulo)",120,20,"text"],["Radiador",80,10],["Alfombra 160x230",160,230],["Pilar",30,30],["Bloque libre",100,100]]
 };
 const COLORS = {Dormitorio:"#7aa7e0",Estudio:"#e0b36a",Salón:"#8fc79a",Otros:"#b7a2d6",Aperturas:"#fff"};
 
@@ -129,6 +129,8 @@ function drawItem(it){
     el("rect",{x:-w/2,y:-it.d/2-1,width:w,height:it.d+2,fill:"var(--panel)"},g);
     el("path",{d:`M ${-w/2} 0 L ${-w/2} ${-w} A ${w} ${w} 0 0 1 ${w/2} 0 Z`,fill:"#2563eb14",stroke:stroke,"stroke-dasharray":"4 3"},g);
     el("line",{x1:-w/2,y1:0,x2:-w/2,y2:-w,stroke:s?"var(--acc)":"#555","stroke-width":3},g);
+  } else if(it.kind==="text"){
+    el("rect",{x:-it.w/2,y:-it.d/2,width:it.w,height:it.d,fill:"transparent",stroke:s?"var(--acc)":"none","stroke-dasharray":"3 3"},g);
   } else if(it.kind==="window"){
     el("rect",{x:-it.w/2,y:-it.d/2,width:it.w,height:it.d,fill:"#bfe3f5",stroke:stroke,"stroke-width":s?2:1},g);
     el("line",{x1:-it.w/2,y1:0,x2:it.w/2,y2:0,stroke:"#4a90b8"},g);
@@ -139,7 +141,8 @@ function drawItem(it){
   const t=el("text",{x:0,y:it.kind==="door"?-it.w/2:0,"text-anchor":"middle","dominant-baseline":"middle","font-size":Math.max(7,Math.min(10,Math.min(it.w,it.d>30?it.w:999)/7)),fill:"#111","pointer-events":"none"},g);
   t.setAttribute("transform",`scale(${it.fx?-1:1} ${it.fy?-1:1}) rotate(${-it.rot})`);
   t.textContent=it.kind?"":`${it.name} ${it.w}×${it.d}`;
-  if(it.kind&&s){ t.textContent=`${it.name}`; }
+  if(it.kind==="text"){ t.textContent=it.name; t.setAttribute("font-size",it.d*.6); t.setAttribute("font-weight",600); t.setAttribute("fill","currentColor"); t.setAttribute("fill-opacity",".55"); }
+  else if(it.kind&&s){ t.textContent=it.name; }
 }
 
 /* ---------- paneles ---------- */
@@ -239,6 +242,7 @@ function fit(){ const m=60,r=S.room; const ar=svg.clientWidth/Math.max(1,svg.cli
 $("#t-select").onclick=()=>setTool("select"); $("#t-wall").onclick=()=>setTool("wall");
 $("#undo").onclick=undo; $("#redo").onclick=redo; $("#fit").onclick=fit;
 $("#snap").onclick=e=>{ snapOn=!snapOn; e.target.classList.toggle("on",snapOn); };
+$("#reset").onclick=()=>{ if(confirm("¿Restaurar el plano del croquis? Se pierde el diseño actual.")){ S=planoInicial(); uid=100; sel=null; commit(); buildLib(); fit(); } };
 $("#clear").onclick=()=>{ if(confirm("¿Vaciar el diseño (se conserva el tamaño de la habitación)?")){ S.items=[];S.walls=[];sel=null;commit();render(); } };
 $("#save").onclick=()=>download(new Blob([snapshot()],{type:"application/json"}),"habitacion.json");
 $("#load").onclick=()=>$("#file").click();
@@ -253,11 +257,27 @@ $("#png").onclick=()=>{
   img.src="data:image/svg+xml;charset=utf-8,"+encodeURIComponent(new XMLSerializer().serializeToString(c));
 };
 
+/* Plano inicial según croquis (cm). X = largo (0 = pared de la puerta doble), Y = ancho (0 = pared de la ventana) */
+function planoInicial(){
+  let n=1; const W=(x1,y1,x2,y2)=>({id:n++,x1,y1,x2,y2,t:10});
+  const I=(name,w,d,kind,x,y,rot,fx,color)=>({id:n++,name,w,d,kind,x,y,rot,fx:!!fx,fy:false,color:color||"#999"});
+  return {room:{w:680,h:400},
+    walls:[W(380,0,380,300),W(200,300,460,300),W(200,300,200,400),W(460,300,460,400)],
+    items:[
+      I("Ventana 110",110,12,"window",185,-6,0),
+      I("Puerta 60 (hoja 1)",60,10,"door",-6,190,90,false),
+      I("Puerta 60 (hoja 2)",60,10,"door",-6,250,90,true),
+      I("Puerta 70",70,10,"door",280,406,0),
+      I("Puerta 90",90,10,"door",460,350,90),
+      I("DORMIR (a retornar)",200,30,"text",190,150,0),
+      I("GAMER (secundaria)",200,30,"text",540,150,0)
+    ]};
+}
 /* ---------- init ---------- */
 (function init(){
   let j=null; try{ j=localStorage.getItem(KEY); }catch{}
   if(j){ try{ S=JSON.parse(j); }catch{} }
-  else { S.walls.push({id:uid++,x1:200,y1:0,x2:200,y2:300,t:10}); }
+  else { S=planoInicial(); }
   uid=1+Math.max(0,...S.items.map(i=>i.id),...S.walls.map(w=>w.id));
   hist=[snapshot()]; buildLib(); fit(); addEventListener("resize",fit);
 })();
