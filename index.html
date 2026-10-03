@@ -71,7 +71,7 @@ svg{width:100%;height:100%;display:block;touch-action:none;user-select:none;back
 "use strict";
 const $ = s => document.querySelector(s);
 const NS = "http://www.w3.org/2000/svg";
-const KEY = "diseno_habitacion_v4";
+const KEY = "diseno_habitacion_v5";
 
 // Catálogo (cm): w = ancho, d = fondo
 const CAT = {
@@ -100,30 +100,56 @@ const svg = $("#svg");
 function pt(e){ const p=svg.createSVGPoint(); p.x=e.clientX; p.y=e.clientY; const q=p.matrixTransform(svg.getScreenCTM().inverse()); return {x:q.x,y:q.y}; }
 const el = (n,a={},p) => { const e=document.createElementNS(NS,n); for(const k in a)e.setAttribute(k,a[k]); if(p)p.appendChild(e); return e; };
 const wLen = w => Math.hypot(w.x2-w.x1,w.y2-w.y1);
-const find = id => S.items.find(i=>i.id===id) || S.walls.find(w=>w.id===id);
+/* Paredes exteriores: ids -1..-4 (n,s,w,e). Cara interior en x0/y0 y x0+w/y0+h; el grosor crece hacia fuera. */
+const OW={"-1":"n","-2":"s","-3":"w","-4":"e"}, OWID={n:-1,s:-2,w:-3,e:-4};
+function room(){ const R=S.room; R.x0=R.x0||0; R.y0=R.y0||0; R.t=Object.assign({n:12,s:12,w:12,e:12},R.t); return R; }
+function outerObj(id){ const R=room(), ow=OW[id]; return {id,outer:true,ow,t:R.t[ow],pos:ow==="n"?R.y0:ow==="s"?R.y0+R.h:ow==="w"?R.x0:R.x0+R.w}; }
+const find = id => id<0 ? outerObj(id) : (S.items.find(i=>i.id===id) || S.walls.find(w=>w.id===id));
+/* aperturas que están sobre una pared exterior (para que se muevan con ella) */
+function openingsOn(ow){ const o=outerObj(OWID[ow]), h=o.t/2+10, c=o.pos+(ow==="n"||ow==="w"?-o.t/2:o.t/2), horiz=ow==="n"||ow==="s", R=room();
+  return S.items.filter(i=>(i.kind==="door"||i.kind==="window")&&(i.rot%180===0)===horiz&&Math.abs((horiz?i.y:i.x)-c)<=h); }
+function shiftOpenings(list,horiz,d){ for(const i of list){ if(horiz)i.y+=d; else i.x+=d; } }
+function moveOuter(ow,newPos){
+  const R=room(), o=outerObj(OWID[ow]), d=newPos-o.pos, horiz=ow==="n"||ow==="s", list=openingsOn(ow);
+  if(!d) return;
+  if(ow==="n"){ if(R.h-d<100)return; R.y0+=d; R.h-=d; }
+  else if(ow==="s"){ if(R.h+d<100)return; R.h+=d; }
+  else if(ow==="w"){ if(R.w-d<100)return; R.x0+=d; R.w-=d; }
+  else { if(R.w+d<100)return; R.w+=d; }
+  shiftOpenings(list,horiz,d);
+}
+function setOuterT(ow,t){
+  const R=room(), old=R.t[ow], horiz=ow==="n"||ow==="s", list=openingsOn(ow); t=Math.max(2,t);
+  R.t[ow]=t; shiftOpenings(list,horiz,(t-old)/2*(ow==="n"||ow==="w"?-1:1));
+}
 const isWall = o => o && "x1" in o;
+const isFurn = o => o && !o.outer && !isWall(o);
 
 /* ---------- render ---------- */
 function render(){
   if(typeof V3!=="undefined"&&V3.on) V3.dirty=true;
-  const {w:RW,h:RH}=S.room, WT=12;
+  const R=room(), RW=R.w, RH=R.h, X0=R.x0, Y0=R.y0, T=R.t;
   svg.setAttribute("viewBox",`${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
   svg.textContent="";
   // rejilla 50 cm
   const g0=el("g",{},svg);
   for(let x=Math.floor(vb.x/50)*50;x<vb.x+vb.w;x+=50) el("line",{x1:x,y1:vb.y,x2:x,y2:vb.y+vb.h,stroke:"currentColor","stroke-opacity":x%100?".05":".12"},g0);
   for(let y=Math.floor(vb.y/50)*50;y<vb.y+vb.h;y+=50) el("line",{x1:vb.x,y1:y,x2:vb.x+vb.w,y2:y,stroke:"currentColor","stroke-opacity":y%100?".05":".12"},g0);
-  // habitación
-  el("rect",{x:-WT,y:-WT,width:RW+2*WT,height:RH+2*WT,fill:"var(--wall)"},svg);
-  el("rect",{x:0,y:0,width:RW,height:RH,fill:"var(--panel)"},svg);
-  dimLabel(svg,0,-WT-6,RW,0,`${RW} cm`);
-  dimLabel(svg,-WT-6,0,RH,-90,`${RH} cm`);
+  // habitación: cuatro paredes exteriores independientes + suelo
+  el("rect",{x:X0,y:Y0,width:RW,height:RH,fill:"var(--panel)"},svg);
+  const OWR={n:[X0-T.w,Y0-T.n,RW+T.w+T.e,T.n],s:[X0-T.w,Y0+RH,RW+T.w+T.e,T.s],w:[X0-T.w,Y0,T.w,RH],e:[X0+RW,Y0,T.e,RH]};
+  for(const k in OWR){ const [x,y,w,h]=OWR[k], on=sel===OWID[k];
+    el("rect",{x,y,width:w,height:h,fill:"var(--wall)","data-id":OWID[k],stroke:on?"var(--acc)":"none","stroke-width":on?2.5:0,style:"cursor:move"},svg);
+    if(on){ const t=el("text",{x:x+w/2,y:y+h/2,"text-anchor":"middle","dominant-baseline":"middle","font-size":11,fill:"#fff","pointer-events":"none"},svg); t.textContent=T[k]+" cm"; } }
+  dimLabel(svg,X0,Y0-T.n-6,RW,0,`${RW} cm`);
+  dimLabel(svg,X0-T.w-6,Y0,RH,-90,`${RH} cm`);
   // tabiques
   for(const w of S.walls) drawWall(w);
   // mobiliario (aperturas al final para quedar sobre muros)
   [...S.items].sort((a,b)=>(a.kind?1:0)-(b.kind?1:0)).forEach(drawItem);
   if(drag&&drag.ghost){ const w=drag.ghost; drawWall(w,true); }
   props(); hint();
+  for(const [id,v] of [["#rw",RW],["#rh",RH]]){ const e=$(id); if(e&&document.activeElement!==e) e.value=v; }
 }
 function dimLabel(p,x,y,len,rot,text){
   const t=el("text",{x:x+(rot?0:len/2),y:y+(rot?len/2:0),"text-anchor":"middle","font-size":11,fill:"currentColor","fill-opacity":".7",transform:`rotate(${rot} ${x+(rot?0:len/2)} ${y+(rot?len/2:0)})`},p); t.textContent=text;
@@ -139,18 +165,25 @@ function drawWall(w,ghost){
   t.textContent=Math.round(L)+" cm";
   if(sel===w.id&&!ghost){ for(const [k,x,y] of [[1,w.x1,w.y1],[2,w.x2,w.y2]]) el("circle",{cx:x,cy:y,r:6,fill:"var(--acc)","data-h":k,"data-id":w.id,style:"cursor:move"},svg); }
 }
+function hostThickness(it){
+  if(it.kind!=="door"&&it.kind!=="window") return it.d;
+  const horiz=it.rot%180===0, R=room();
+  for(const ow of horiz?["n","s"]:["w","e"]){ const o=outerObj(OWID[ow]), c=o.pos+(ow==="n"||ow==="w"?-o.t/2:o.t/2); if(Math.abs((horiz?it.y:it.x)-c)<=o.t/2+10) return o.t; }
+  for(const w of S.walls){ if(horiz&&w.y1===w.y2&&Math.abs(it.y-w.y1)<=w.t/2+10) return w.t; if(!horiz&&w.x1===w.x2&&Math.abs(it.x-w.x1)<=w.t/2+10) return w.t; }
+  return it.d;
+}
 function drawItem(it){
   const g=el("g",{"data-id":it.id,transform:`translate(${it.x} ${it.y}) rotate(${it.rot}) scale(${it.fx?-1:1} ${it.fy?-1:1})`,style:"cursor:move"},svg);
   const s=sel===it.id, stroke=s?"var(--acc)":"#00000066";
   if(it.kind==="door"){
     const w=it.w;
-    el("rect",{x:-w/2,y:-it.d/2-1,width:w,height:it.d+2,fill:"var(--panel)"},g);
+    const ht=hostThickness(it); el("rect",{x:-w/2,y:-ht/2-1,width:w,height:ht+2,fill:"var(--panel)"},g);
     el("path",{d:`M ${-w/2} 0 L ${-w/2} ${-w} A ${w} ${w} 0 0 1 ${w/2} 0 Z`,fill:"#2563eb14",stroke:stroke,"stroke-dasharray":"4 3"},g);
     el("line",{x1:-w/2,y1:0,x2:-w/2,y2:-w,stroke:s?"var(--acc)":"#555","stroke-width":3},g);
   } else if(it.kind==="text"){
     el("rect",{x:-it.w/2,y:-it.d/2,width:it.w,height:it.d,fill:"transparent",stroke:s?"var(--acc)":"none","stroke-dasharray":"3 3"},g);
   } else if(it.kind==="window"){
-    el("rect",{x:-it.w/2,y:-it.d/2,width:it.w,height:it.d,fill:"#bfe3f5",stroke:stroke,"stroke-width":s?2:1},g);
+    const wt=hostThickness(it); el("rect",{x:-it.w/2,y:-wt/2,width:it.w,height:wt,fill:"#bfe3f5",stroke:stroke,"stroke-width":s?2:1},g);
     el("line",{x1:-it.w/2,y1:0,x2:it.w/2,y2:0,stroke:"#4a90b8"},g);
   } else if(it.shape==="L"){
     const a=Math.min(it.a,it.d),b=Math.min(it.b,it.w),x0=-it.w/2,y0=-it.d/2;
@@ -173,7 +206,7 @@ function drawItem(it){
 function magnet(o,x,y){
   if(o.rot%90) return [x,y];
   const sw=o.rot%180===0, hx=(sw?o.w:o.d)/2, hy=(sw?o.d:o.w)/2, T=8;
-  const V=[[0,0,S.room.h],[S.room.w,0,S.room.h]], H=[[0,0,S.room.w],[S.room.h,0,S.room.w]]; // [pos, desde, hasta]
+  const R=room(), V=[[R.x0,R.y0,R.y0+R.h],[R.x0+R.w,R.y0,R.y0+R.h]], H=[[R.y0,R.x0,R.x0+R.w],[R.y0+R.h,R.x0,R.x0+R.w]]; // [pos, desde, hasta]
   for(const w of S.walls){ const t=w.t/2;
     if(w.x1===w.x2){ const a=Math.min(w.y1,w.y2),b=Math.max(w.y1,w.y2); V.push([w.x1-t,a,b],[w.x1+t,a,b]); }
     else if(w.y1===w.y2){ const a=Math.min(w.x1,w.x2),b=Math.max(w.x1,w.x2); H.push([w.y1-t,a,b],[w.y1+t,a,b]); } }
@@ -200,12 +233,22 @@ function buildLib(){
   }
 }
 function addItem(o){
-  const it={id:uid++,name:o.name,w:o.w,d:o.d,kind:o.kind||null,shape:o.shape,a:o.a,b:o.b,h:o.h,color:o.color||"#999",x:sn(S.room.w/2),y:sn(S.room.h/2),rot:0,fx:false,fy:false};
+  const it={id:uid++,name:o.name,w:o.w,d:o.d,kind:o.kind||null,shape:o.shape,a:o.a,b:o.b,h:o.h,color:o.color||"#999",x:sn(room().x0+S.room.w/2),y:sn(room().y0+S.room.h/2),rot:0,fx:false,fy:false};
   S.items.push(it); sel=it.id; commit(); render();
 }
 function props(){
   const P=$("#props"), o=sel&&find(sel);
   if(!o){ P.innerHTML=`<h3>Resumen</h3><p>${S.items.length} elementos · ${S.walls.length} tabiques</p><p style="color:var(--mut)">Selecciona algo o añade mobiliario del catálogo. Con «Dibujar tabique» arrastra sobre el plano para trazar montantes.</p>`; return; }
+  if(o.outer){
+    const nm={n:"Norte (ventana)",s:"Sur",w:"Oeste",e:"Este"}[o.ow], hz=o.ow==="n"||o.ow==="s";
+    P.innerHTML=`<h3>Pared exterior · ${nm}</h3>
+    <div class="row"><label>Grosor cm</label><input id="p-t" type="number" value="${o.t}"></div>
+    <div class="row"><label>Cara interior ${hz?"Y":"X"}</label><input id="p-pos" type="number" value="${o.pos}"></div>
+    <p style="color:var(--mut);font-size:12px">El grosor crece hacia fuera. Mover la pared cambia el tamaño interior de la habitación; las puertas y ventanas de esa pared se mueven con ella. También: arrastrar, flechas (Shift = 10 cm).</p>`;
+    $("#p-t").onchange=e=>{ setOuterT(o.ow,+e.target.value||o.t); commit(); render(); };
+    $("#p-pos").onchange=e=>{ moveOuter(o.ow,+e.target.value); commit(); render(); };
+    return;
+  }
   if(isWall(o)){
     P.innerHTML=`<h3>Tabique</h3><div class="row"><label>Largo cm</label><input id="p-len" type="number" value="${Math.round(wLen(o))}"></div><div class="row"><label>Grosor cm</label><input id="p-t" type="number" value="${o.t}"></div><div class="btns"><button id="p-del">Eliminar</button></div>`;
     $("#p-len").onchange=e=>{ const L=wLen(o)||1,k=(+e.target.value)/L; o.x2=o.x1+(o.x2-o.x1)*k; o.y2=o.y1+(o.y2-o.y1)*k; commit(); render(); };
@@ -233,7 +276,7 @@ function props(){
 }
 function rot(o){ o.rot=(o.rot+90)%360; commit(); render(); }
 function dup(o){ const c={...o,id:uid++,x:o.x+20,y:o.y+20}; S.items.push(c); sel=c.id; commit(); render(); }
-function del(){ if(!sel)return; S.items=S.items.filter(i=>i.id!==sel); S.walls=S.walls.filter(w=>w.id!==sel); sel=null; commit(); render(); }
+function del(){ if(!sel||sel<0)return; S.items=S.items.filter(i=>i.id!==sel); S.walls=S.walls.filter(w=>w.id!==sel); sel=null; commit(); render(); }
 function hint(){ $("#hint").textContent = tool==="wall" ? "Arrastra para trazar un tabique (Alt = ángulo libre)" : "Arrastra elementos (Alt = sin imán) · R girar · Supr borrar · rueda = zoom · arrastrar fondo = mover vista"; }
 
 /* ---------- interacción ---------- */
@@ -244,13 +287,14 @@ svg.addEventListener("pointerdown",e=>{
   svg.setPointerCapture(e.pointerId);
   if(tool==="wall"){ const q={x:sn(p.x),y:sn(p.y)}; drag={type:"newwall",a:q,ghost:{id:0,x1:q.x,y1:q.y,x2:q.x,y2:q.y,t:10}}; return; }
   if(h){ drag={type:"handle",o:find(+h.dataset.id),k:+h.dataset.h}; return; }
-  if(t){ const o=find(+t.dataset.id); sel=o.id; drag=isWall(o)?{type:"movewall",o,p0:p,orig:{...o},moved:false}:{type:"move",o,dx:o.x-p.x,dy:o.y-p.y,moved:false}; render(); return; }
+  if(t){ const o=find(+t.dataset.id); sel=o.id; drag=o.outer?{type:"moveouter",o,p0:p,start:o.pos,moved:false}:isWall(o)?{type:"movewall",o,p0:p,orig:{...o},moved:false}:{type:"move",o,dx:o.x-p.x,dy:o.y-p.y,moved:false}; render(); return; }
   sel=null; drag={type:"pan",sx:e.clientX,sy:e.clientY,vb0:{...vb}}; render();
 });
 svg.addEventListener("pointermove",e=>{
   if(!drag)return; const p=pt(e);
   if(drag.type==="pan"){ const k=vb.w/svg.clientWidth; vb.x=drag.vb0.x-(e.clientX-drag.sx)*k; vb.y=drag.vb0.y-(e.clientY-drag.sy)*k; render(); return; }
   if(drag.type==="newwall"){ let x=sn(p.x),y=sn(p.y); if(!e.altKey){ const dx=Math.abs(x-drag.a.x),dy=Math.abs(y-drag.a.y); if(dy<dx*.15)y=drag.a.y; else if(dx<dy*.15)x=drag.a.x; } Object.assign(drag.ghost,{x2:x,y2:y}); render(); return; }
+  if(drag.type==="moveouter"){ const hz=drag.o.ow==="n"||drag.o.ow==="s"; drag.moved=true; moveOuter(drag.o.ow,sn(drag.start+(hz?p.y-drag.p0.y:p.x-drag.p0.x))); render(); return; }
   if(drag.type==="move"){ drag.moved=true; let x=sn(p.x+drag.dx),y=sn(p.y+drag.dy); if(magOn&&!e.altKey&&!drag.o.kind)[x,y]=magnet(drag.o,x,y); drag.o.x=x; drag.o.y=y; render(); return; }
   if(drag.type==="movewall"){ drag.moved=true; const o=drag.o,s=drag.orig,dx=sn(p.x-drag.p0.x),dy=sn(p.y-drag.p0.y); o.x1=s.x1+dx;o.y1=s.y1+dy;o.x2=s.x2+dx;o.y2=s.y2+dy; render(); return; }
   if(drag.type==="handle"){ drag.moved=true; const o=drag.o; let x=sn(p.x),y=sn(p.y); const ox=drag.k===1?o.x2:o.x1, oy=drag.k===1?o.y2:o.y1; if(!e.altKey){ const dx=Math.abs(x-ox),dy=Math.abs(y-oy); if(dy<dx*.15)y=oy; else if(dx<dy*.15)x=ox; } if(drag.k===1){o.x1=x;o.y1=y}else{o.x2=x;o.y2=y} render(); }
@@ -270,15 +314,16 @@ addEventListener("keydown",e=>{
   else if((e.ctrlKey||e.metaKey)&&k.toLowerCase()==="y"){ e.preventDefault(); redo(); }
   else if(k==="Delete"||k==="Backspace") del();
   else if(k==="Escape"){ sel=null; setTool("select"); render(); }
-  else if(k.toLowerCase()==="r"&&o&&!isWall(o)) rot(o);
+  else if(k.toLowerCase()==="r"&&isFurn(o)) rot(o);
   else if(k.toLowerCase()==="w") setTool("wall");
   else if(k.toLowerCase()==="v") setTool("select");
   else if(o&&k.startsWith("Arrow")){ e.preventDefault(); const s=e.shiftKey?10:1,dx=({ArrowLeft:-s,ArrowRight:s})[k]||0,dy=({ArrowUp:-s,ArrowDown:s})[k]||0;
-    if(isWall(o)){o.x1+=dx;o.x2+=dx;o.y1+=dy;o.y2+=dy}else{o.x+=dx;o.y+=dy} commit(); render(); }
+    if(o.outer){ moveOuter(o.ow,o.pos+((o.ow==="n"||o.ow==="s")?dy:dx)); }
+    else if(isWall(o)){o.x1+=dx;o.x2+=dx;o.y1+=dy;o.y2+=dy}else{o.x+=dx;o.y+=dy} commit(); render(); }
 });
 
 /* ---------- cabecera ---------- */
-function fit(){ const m=60,r=S.room; const ar=svg.clientWidth/Math.max(1,svg.clientHeight)||1.5; let w=r.w+2*m,h=r.h+2*m; if(w/h<ar)w=h*ar; else h=w/ar; vb={x:r.w/2-w/2,y:r.h/2-h/2,w,h}; render(); }
+function fit(){ const m=60,r=S.room; const ar=svg.clientWidth/Math.max(1,svg.clientHeight)||1.5; let w=r.w+2*m,h=r.h+2*m; if(w/h<ar)w=h*ar; else h=w/ar; vb={x:room().x0+r.w/2-w/2,y:room().y0+r.h/2-h/2,w,h}; render(); }
 $("#t-select").onclick=()=>setTool("select"); $("#t-wall").onclick=()=>setTool("wall");
 $("#undo").onclick=undo; $("#redo").onclick=redo; $("#fit").onclick=fit;
 $("#mag").onclick=e=>{ magOn=!magOn; e.target.classList.toggle("on",magOn); };
@@ -290,7 +335,7 @@ $("#load").onclick=()=>$("#file").click();
 $("#file").onchange=async e=>{ const f=e.target.files[0]; if(!f)return; try{ const j=JSON.parse(await f.text()); if(!j.room||!j.items||!j.walls)throw 0; S=j; restore(JSON.stringify(j)); commit(); buildLib(); fit(); }catch{ alert("Archivo no válido"); } e.target.value=""; };
 function download(blob,name){ const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); }
 $("#png").onclick=()=>{
-  const prev=sel; sel=null; const r=S.room,m=40; const saved={...vb}; vb={x:-m,y:-m,w:r.w+2*m,h:r.h+2*m}; render();
+  const prev=sel; sel=null; const r=S.room,m=40; const saved={...vb}; vb={x:room().x0-m,y:room().y0-m,w:r.w+2*m,h:r.h+2*m}; render();
   const c=svg.cloneNode(true); c.setAttribute("xmlns",NS); c.setAttribute("width",vb.w*2); c.setAttribute("height",vb.h*2);
   const cs=getComputedStyle(document.body); const vars=["--bg","--panel","--ink","--wall"].map(v=>`${v}:${cs.getPropertyValue(v)}`).join(";");
   c.setAttribute("style",`${vars};color:${cs.color};background:${cs.getPropertyValue("--bg")}`);
@@ -299,7 +344,7 @@ $("#png").onclick=()=>{
 };
 
 /* Plano DEFINITIVO (exportado por el usuario, cm). X = largo, Y = ancho. Escritorio en L: w×d = caja total, a = fondo del tablero principal, b = fondo del ala */
-const DEFINITIVO = {"room": {"w": 680, "h": 400}, "walls": [{"id": 1, "x1": 380, "y1": 0, "x2": 380, "y2": 320, "t": 10}, {"id": 2, "x1": 155, "y1": 320, "x2": 425, "y2": 320, "t": 10}, {"id": 3, "x1": 165, "y1": 320, "x2": 165, "y2": 400, "t": 10}, {"id": 4, "x1": 430, "y1": 320, "x2": 430, "y2": 400, "t": 10}], "items": [{"id": 5, "name": "Ventana 110", "w": 110, "d": 12, "kind": "window", "x": 180, "y": -5, "rot": 0, "fx": false, "fy": false, "color": "#999"}, {"id": 8, "name": "Puerta 70", "w": 70, "d": 10, "kind": "door", "x": 235, "y": 405, "rot": 0, "fx": true, "fy": false, "color": "#999"}, {"id": 9, "name": "Puerta 70 (a gamer)", "w": 70, "d": 10, "kind": "door", "x": 430, "y": 360, "rot": 90, "fx": true, "fy": false, "color": "#999"}, {"id": 10, "name": "DORMIR (a retornar)", "w": 160, "d": 24, "kind": "text", "x": 150, "y": 250, "rot": 0, "fx": false, "fy": false, "color": "#999"}, {"id": 11, "name": "GAMER (secundaria)", "w": 200, "d": 30, "kind": "text", "x": 540, "y": 150, "rot": 0, "fx": false, "fy": false, "color": "#999"}, {"id": 106, "name": "Puerta 72", "w": 72, "d": 10, "kind": "door", "color": "#fff", "x": 165, "y": 360, "rot": 270, "fx": true, "fy": true}, {"id": 107, "name": "Puerta 92", "w": 92, "d": 10, "kind": "door", "color": "#fff", "x": -5, "y": 210, "rot": 90, "fx": false, "fy": false}, {"id": 120, "name": "Cama 140", "w": 140, "d": 200, "kind": null, "x": 305, "y": 215, "rot": 180, "fx": false, "fy": false, "color": "#7aa7e0", "h": 45, "z": 0}, {"id": 122, "name": "TV 55\" colgada", "w": 123, "d": 6, "kind": null, "x": 305, "y": 3, "rot": 180, "fx": false, "fy": true, "color": "#4b5563", "h": 71, "z": 75}, {"id": 123, "name": "Armario 140x180", "w": 140, "d": 60, "kind": null, "x": 30, "y": 70, "rot": 90, "fx": false, "fy": true, "color": "#e0b36a", "h": 180, "z": 0}, {"id": 125, "name": "Escritorio en L", "shape": "L", "w": 150, "d": 130, "a": 60, "b": 60, "kind": null, "x": 75, "y": 335, "rot": 0, "fx": false, "fy": true, "color": "#8fc79a", "h": 75, "z": 0}]};
+const DEFINITIVO = {"room": {"w": 680, "h": 400, "x0": 0, "y0": 0, "t": {"n": 12, "s": 30, "w": 12, "e": 12}}, "walls": [{"id": 1, "x1": 380, "y1": 0, "x2": 380, "y2": 320, "t": 10}, {"id": 2, "x1": 155, "y1": 320, "x2": 425, "y2": 320, "t": 10}, {"id": 3, "x1": 165, "y1": 320, "x2": 165, "y2": 400, "t": 10}, {"id": 4, "x1": 430, "y1": 320, "x2": 430, "y2": 400, "t": 10}], "items": [{"id": 5, "name": "Ventana 110", "w": 110, "d": 12, "kind": "window", "x": 180, "y": -5, "rot": 0, "fx": false, "fy": false, "color": "#999"}, {"id": 8, "name": "Puerta 70", "w": 70, "d": 10, "kind": "door", "x": 235, "y": 415, "rot": 0, "fx": true, "fy": false, "color": "#999"}, {"id": 9, "name": "Puerta 70 (a gamer)", "w": 70, "d": 10, "kind": "door", "x": 430, "y": 360, "rot": 90, "fx": true, "fy": false, "color": "#999"}, {"id": 10, "name": "DORMIR (a retornar)", "w": 160, "d": 24, "kind": "text", "x": 150, "y": 250, "rot": 0, "fx": false, "fy": false, "color": "#999"}, {"id": 11, "name": "GAMER (secundaria)", "w": 200, "d": 30, "kind": "text", "x": 540, "y": 150, "rot": 0, "fx": false, "fy": false, "color": "#999"}, {"id": 106, "name": "Puerta 72", "w": 72, "d": 10, "kind": "door", "color": "#fff", "x": 165, "y": 360, "rot": 270, "fx": true, "fy": true}, {"id": 107, "name": "Puerta 92", "w": 92, "d": 10, "kind": "door", "color": "#fff", "x": -5, "y": 210, "rot": 90, "fx": false, "fy": false}, {"id": 120, "name": "Cama 140", "w": 140, "d": 200, "kind": null, "x": 305, "y": 215, "rot": 180, "fx": false, "fy": false, "color": "#7aa7e0", "h": 45, "z": 0}, {"id": 122, "name": "TV 55\" colgada", "w": 123, "d": 6, "kind": null, "x": 305, "y": 3, "rot": 180, "fx": false, "fy": true, "color": "#4b5563", "h": 71, "z": 75}, {"id": 123, "name": "Armario 140x180", "w": 140, "d": 60, "kind": null, "x": 30, "y": 70, "rot": 90, "fx": false, "fy": true, "color": "#e0b36a", "h": 180, "z": 0}, {"id": 125, "name": "Escritorio en L", "shape": "L", "w": 150, "d": 130, "a": 60, "b": 60, "kind": null, "x": 75, "y": 335, "rot": 0, "fx": false, "fy": true, "color": "#8fc79a", "h": 75, "z": 0}]};
 function planoInicial(){ return JSON.parse(JSON.stringify(DEFINITIVO)); }
 /* ---------- Vista 3D (three.js, cm → unidades; plano X→x, plano Y→z, altura→y) ---------- */
 var V3={on:false,dirty:false,wallH:110,cmp:false,cam:"orbit"};
@@ -310,16 +355,16 @@ function box3(w,h,d,color,x,y,z,opts={}){
   m.position.set(x,y,z); m.castShadow=true; m.receiveShadow=true; return m;
 }
 function buildScene(items){
-  const sc=new THREE.Scene(), W=S.room.w, H=S.room.h, WH=V3.wallH;
+  const sc=new THREE.Scene(), R=room(), W=R.w, H=R.h, X0=R.x0, Y0=R.y0, T=R.t, WH=V3.wallH;
   sc.background=new THREE.Color(getComputedStyle(document.body).getPropertyValue("--bg").trim()||"#f4f5f7");
   sc.add(new THREE.HemisphereLight(0xffffff,0x8a8a8a,.75));
-  const sun=new THREE.DirectionalLight(0xffffff,.65); sun.position.set(W*.2,700,H*1.4); sun.target.position.set(W/2,0,H/2);
+  const sun=new THREE.DirectionalLight(0xffffff,.65); sun.position.set(X0+W*.2,700,Y0+H*1.4); sun.target.position.set(X0+W/2,0,Y0+H/2);
   sun.castShadow=true; sun.shadow.mapSize.set(2048,2048); const c=sun.shadow.camera; c.left=-500;c.right=500;c.top=500;c.bottom=-500;c.near=100;c.far=1800; sc.add(sun,sun.target);
-  const floor=box3(W,2,H,0xc8b394,W/2,-1,H/2); floor.castShadow=false; sc.add(floor);
+  const floor=box3(W,2,H,0xc8b394,X0+W/2,-1,Y0+H/2); floor.castShadow=false; sc.add(floor);
   // paredes: exteriores (12 cm, hacia fuera) + tabiques
   const segs=[
-    {ax:"x",fix:-6,t:12,a:-12,b:W+12,c:0xdedad2},{ax:"x",fix:H+6,t:12,a:-12,b:W+12,c:0xdedad2},
-    {ax:"z",fix:-6,t:12,a:0,b:H,c:0xdedad2},{ax:"z",fix:W+6,t:12,a:0,b:H,c:0xdedad2}];
+    {ax:"x",fix:Y0-T.n/2,t:T.n,a:X0-T.w,b:X0+W+T.e,c:0xdedad2},{ax:"x",fix:Y0+H+T.s/2,t:T.s,a:X0-T.w,b:X0+W+T.e,c:0xdedad2},
+    {ax:"z",fix:X0-T.w/2,t:T.w,a:Y0,b:Y0+H,c:0xdedad2},{ax:"z",fix:X0+W+T.e/2,t:T.e,a:Y0,b:Y0+H,c:0xdedad2}];
   for(const w of S.walls){ if(w.x1===w.x2) segs.push({ax:"z",fix:w.x1,t:w.t,a:Math.min(w.y1,w.y2),b:Math.max(w.y1,w.y2),c:0xf1eee7});
     else if(w.y1===w.y2) segs.push({ax:"x",fix:w.y1,t:w.t,a:Math.min(w.x1,w.x2),b:Math.max(w.x1,w.x2),c:0xf1eee7}); }
   const ops=segs.map(()=>[]);
@@ -372,11 +417,11 @@ function init3D(){
   setCam(V3.cam);
 }
 function setCam(k){
-  V3.cam=k; const W=S.room.w,H=S.room.h, bed=S.items.find(i=>/^Cama/.test(i.name)), tv=S.items.find(i=>/^TV/.test(i.name));
-  const f=1; let p=[W/2+100*f,600*f,H+470*f], t=[W/2,0,H/2];
-  if(k==="top"){ p=[W/2,Math.max(W,H)*1.25*f,H/2+1]; }
-  if(k==="door"){ p=[18,165,H*.55]; t=[W*.6,90,H*.45]; }
-  if(k==="bed"){ if(bed){ p=[bed.x,95,bed.y]; } t=tv?[tv.x,(tv.z||75)+(tv.h||71)/2,tv.y]:[W/2,90,H/2]; }
+  V3.cam=k; const R0=room(), W=R0.w,H=R0.h, bed=S.items.find(i=>/^Cama/.test(i.name)), tv=S.items.find(i=>/^TV/.test(i.name));
+  const X0=R0.x0,Y0=R0.y0; let p=[X0+W/2+100,600,Y0+H+470], t=[X0+W/2,0,Y0+H/2];
+  if(k==="top"){ p=[X0+W/2,Math.max(W,H)*1.25,Y0+H/2+1]; }
+  if(k==="door"){ p=[X0+18,165,Y0+H*.55]; t=[X0+W*.6,90,Y0+H*.45]; }
+  if(k==="bed"){ if(bed){ p=[bed.x,95,bed.y]; } t=tv?[tv.x,(tv.z||75)+(tv.h||71)/2,tv.y]:[X0+W/2,90,Y0+H/2]; }
   CAM3.position.set(...p); CT.target.set(...t); CT.update();
 }
 function loop3D(tok){
