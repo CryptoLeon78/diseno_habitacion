@@ -36,12 +36,14 @@ svg{width:100%;height:100%;display:block;touch-action:none;user-select:none;back
 .cf small{display:block;color:var(--mut);font-size:11px}
 #bom{position:fixed;inset:0;background:#0008;z-index:50;display:flex;align-items:center;justify-content:center}
 #bom[hidden]{display:none}
+#bombox,#expbox{position:relative}
+.xclose{position:absolute;top:8px;right:10px;z-index:5;width:32px;height:32px;padding:0;font-size:16px;border-radius:50%;line-height:1}
 #bombox{background:var(--panel);border:1px solid var(--line);border-radius:10px;width:min(1180px,97vw);height:min(760px,93vh);display:grid;grid-template-columns:270px 1fr;overflow:hidden}
 #bomside{padding:14px;overflow:auto;border-right:1px solid var(--line)}
 #bomside h3{margin:14px 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut)}
 #bomside h3:first-child{margin-top:0}
 #bommain{padding:14px;overflow:auto}
-.bomhead{display:flex;gap:6px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+.bomhead{padding-right:40px;display:flex;gap:6px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
 #bomtable{width:100%;border-collapse:collapse;font-size:13px}
 #bomtable th{text-align:left;font-size:11px;text-transform:uppercase;color:var(--mut);padding:4px 6px;border-bottom:1px solid var(--line)}
 #bomtable td{padding:5px 6px;border-bottom:1px solid var(--line);vertical-align:top}
@@ -57,7 +59,7 @@ svg{width:100%;height:100%;display:block;touch-action:none;user-select:none;back
 #exp{position:fixed;inset:0;background:#0008;z-index:50;display:flex;align-items:center;justify-content:center}
 #exp[hidden]{display:none}
 #expbox{background:var(--panel);border:1px solid var(--line);border-radius:10px;width:min(1100px,96vw);height:min(720px,92vh);display:grid;grid-template-columns:300px 1fr;overflow:hidden}
-#expform{padding:14px;overflow:auto;border-right:1px solid var(--line)}
+#expform{padding:14px;padding-top:44px;overflow:auto;border-right:1px solid var(--line)}
 #expform h3{margin:14px 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut)}
 #expform h3:first-child{margin-top:0}
 #expprev{padding:14px;overflow:auto;background:var(--bg)}
@@ -100,7 +102,7 @@ svg{width:100%;height:100%;display:block;touch-action:none;user-select:none;back
   </div></div>
 <aside id="props"></aside>
 <div id="bom" hidden>
-  <div id="bombox">
+  <div id="bombox"><button class="xclose" data-close="#bom" title="Cerrar (Esc)">✕</button>
     <div id="bomside">
       <h3>Lista de compra</h3>
       <div class="row"><label>Altura techo cm</label><input id="b-techo" type="number"></div>
@@ -109,7 +111,7 @@ svg{width:100%;height:100%;display:block;touch-action:none;user-select:none;back
       <div class="row"><label>Caja suelo m²</label><input id="b-caja" type="number" step="0.1"></div>
       <h3>Incluir</h3><div id="bom-groups"></div>
       <h3>Tabiques de pladur</h3><div id="bom-tab"></div>
-      <p style="color:var(--mut);font-size:12px">«Estructura» = canales y montantes. El tabique 1 se marca como ya montado. Pon precios por línea y marca «ya lo tengo» para excluir de la suma.</p>
+      <p style="color:var(--mut);font-size:12px">«Estructura» = canales y montantes. Ningún tabique está montado, así que se cuenta todo. Pon precios por línea y marca «ya lo tengo» para excluir de la suma.</p>
     </div>
     <div id="bommain">
       <div class="bomhead"><span id="bom-sum" style="color:var(--mut);font-size:12px"></span><span style="flex:1"></span><button id="bom-csv" class="on">Descargar CSV</button><button id="bom-print">Imprimir / PDF</button><button id="bom-close">Cerrar</button></div>
@@ -120,7 +122,7 @@ svg{width:100%;height:100%;display:block;touch-action:none;user-select:none;back
   </div>
 </div>
 <div id="exp" hidden>
-  <div id="expbox">
+  <div id="expbox"><button class="xclose" data-close="#exp" title="Cerrar (Esc)">✕</button>
     <div id="expform">
       <h3>Exportar</h3>
       <div class="row"><label>Título</label><input id="x-title" value="Reforma habitación"></div>
@@ -922,16 +924,21 @@ document.querySelectorAll("#exp input,#exp select").forEach(e=>e.addEventListene
 $("#x-pdf").onclick=()=>runExport("pdf"); $("#x-zip").onclick=()=>runExport("zip");
 
 /* ---------- Lista de compra / mediciones ---------- */
-const BOMKEY="diseno_habitacion_compra_v1";
-let BC={techo:250,capas:1,merma:10,caja:2.2,prices:{},have:{},tab:{},groups:{mob:true,pla:true,car:true,sue:true,pin:true,obra:true}};
+const BOMKEY="diseno_habitacion_compra_v2";
+let BC={techo:250,capas:1,merma:10,caja:2.2,prices:{},have:{},tab:{},groups:{mob:true,pla:true,car:true,sue:true,pin:true}};
 try{ Object.assign(BC,JSON.parse(localStorage.getItem(BOMKEY)||"{}")); }catch{}
+try{ if(!localStorage.getItem(BOMKEY)){ const o=JSON.parse(localStorage.getItem("diseno_habitacion_compra_v1")||"{}"); BC.prices=o.prices||{}; BC.have=o.have||{}; } }catch{}   // migra precios, no la config de tabiques
+delete BC.groups.obra;
+document.querySelectorAll(".xclose").forEach(b=>b.onclick=()=>{ $(b.dataset.close).hidden=true; });
+document.querySelectorAll("#bom,#exp").forEach(o=>o.addEventListener("pointerdown",e=>{ if(e.target===o) o.hidden=true; }));
+addEventListener("keydown",e=>{ if(e.key==="Escape"){ const m=[$("#bom"),$("#exp")].find(x=>!x.hidden); if(m){ m.hidden=true; e.stopImmediatePropagation(); } } },true);
 const saveBC=()=>{ try{localStorage.setItem(BOMKEY,JSON.stringify(BC))}catch{} };
 const fmt=(n,d=2)=>Number(n).toLocaleString("es-ES",{minimumFractionDigits:0,maximumFractionDigits:d});
 function openingsOnTabique(w){        // puertas/ventanas sobre un tabique ortogonal
   const hz=w.y1===w.y2, vt=w.x1===w.x2; if(!hz&&!vt) return [];
   return S.items.filter(i=>(i.kind==="door"||i.kind==="window")&&((i.rot%180===0)===hz)&&Math.abs((hz?i.y-w.y1:i.x-w.x1))<=w.t/2+10&&(hz?i.x:i.y)>=Math.min(hz?w.x1:w.y1,hz?w.x2:w.y2)-1&&(hz?i.x:i.y)<=Math.max(hz?w.x1:w.y1,hz?w.x2:w.y2)+1);
 }
-function tabCfg(id){ return BC.tab[id]||(BC.tab[id]={est:id!==1,pla:true,ais:true}); }   // el tabique nº1 ya tiene los montantes puestos
+function tabCfg(id){ return BC.tab[id]||(BC.tab[id]={est:true,pla:true,ais:true}); }   // ningún tabique está montado: se compra todo
 function buildBOM(){
   const H=BC.techo/100, cap=BC.capas, mer=1+BC.merma/100, lines=[], R=room(), L=(g,key,name,qty,unit,detail,extra={})=>lines.push({g,key,name,qty,unit,detail,...extra});
   // ---- Mobiliario
@@ -975,13 +982,9 @@ function buildBOM(){
     L("pin","pin:imp","Imprimación / fijador (L)",Math.ceil(tot/12),"L",`${fmt(tot)} m² (paredes ${fmt(paredes)} + techo ${fmt(techo)})`);
     L("pin","pin:pint","Pintura plástica (2 manos, 15 L/bote)",Math.ceil(tot*2/10/15),"botes",`≈${fmt(tot*2/10)} L · 10 m²/L por mano`);
     L("pin","pin:cinta","Cinta de carrocero, plástico y protección",1,"lote",""); }
-  // ---- Obra de albañilería (informativo)
-  if(BC.groups.obra){ for(const ow of ["n","s","w","e"]){ const hz=ow==="n"||ow==="s", lo=hz?R.x0:R.y0, hi=hz?R.x0+R.w:R.y0+R.h;
-      for(const q of wallPieces(ow)){ if(q.dir!=="in") continue; const len=Math.max(0,Math.min(q.b,hi)-Math.max(q.a,lo))/100, vol=len*q.t/100*H;
-        L("obra",`obra:${ow}:${q.a}`,`Muro hacia dentro, pared ${{n:"norte",s:"sur",w:"oeste",e:"este"}[ow]}`,Number(vol.toFixed(2)),"m³",`${fmt(len)} m × ${q.t} cm × ${fmt(H)} m · material y mortero a definir`,{info:true}); } } }
   return {lines,tabInfo,estTab,floor,perim,paredes};
 }
-const BOMG={mob:"Mobiliario",pla:"Tabiques de pladur",car:"Carpintería",sue:"Suelo y rodapié",pin:"Pintura",obra:"Obra de albañilería"};
+const BOMG={mob:"Mobiliario",pla:"Tabiques de pladur",car:"Carpintería",sue:"Suelo y rodapié",pin:"Pintura"};
 function lineTotal(l){ if(l.info||BC.have[l.key]) return 0; return (+BC.prices[l.key]||0)*l.qty; }
 function renderBOM(){
   const B=buildBOM(), host=$("#bom-tab"), tb=$("#bom-body");
