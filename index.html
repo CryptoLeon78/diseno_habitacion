@@ -37,9 +37,6 @@ svg{width:100%;height:100%;display:block;touch-action:none;user-select:none;back
 #v3bar select{padding:3px 6px;border:1px solid var(--line);border-radius:5px;background:var(--bg)}
 #v3c{flex:1;min-height:0;position:relative}
 #v3c canvas{position:absolute;left:0;top:0;width:100%;height:100%;display:block}
-#v3l{position:absolute;left:0;right:0;top:44px;display:flex;pointer-events:none}
-#v3l[hidden]{display:none}
-#v3l span{flex:1;text-align:center;font-weight:600;background:#ffffffb3;color:#111;margin:6px 12px;padding:3px 8px;border-radius:6px}
 </style>
 </head>
 <body>
@@ -49,7 +46,7 @@ svg{width:100%;height:100%;display:block;touch-action:none;user-select:none;back
   <button id="t-wall" title="W">Dibujar tabique</button>
   <button id="undo" title="Ctrl+Z">↶</button><button id="redo" title="Ctrl+Y">↷</button>
   <button id="snap" class="on">Rejilla 5 cm</button><button id="mag" class="on">Imán a paredes</button>
-  <select id="lay" title="Propuestas de distribución"><option value="">Propuesta…</option></select>
+  
   <button id="fit">Ajustar vista</button><button id="b3d">Vista 3D</button>
   <span style="flex:1"></span>
   <button id="save">Guardar JSON</button><button id="load">Abrir JSON</button>
@@ -62,11 +59,9 @@ svg{width:100%;height:100%;display:block;touch-action:none;user-select:none;back
     <div id="v3bar">
       <label>Cámara <select id="v3cam"><option value="orbit">Orbital (isométrica)</option><option value="top">Cenital</option><option value="door">Desde la puerta</option><option value="bed">Desde la cama (hacia la TV)</option></select></label>
       <label>Paredes <select id="v3wall"><option value="110">Corte a 110 cm</option><option value="250">Completas (250 cm)</option><option value="0">Sin paredes</option></select></label>
-      <label><input type="checkbox" id="v3cmp"> Comparar A | B</label>
       <button id="v3png">Captura PNG</button>
     </div>
     <div id="v3c"></div>
-    <div id="v3l" hidden><span>A · Cabecero en tabique</span><span>B · Cabecero bajo ventana</span></div>
   </div></div>
 <aside id="props"></aside>
 
@@ -76,12 +71,12 @@ svg{width:100%;height:100%;display:block;touch-action:none;user-select:none;back
 "use strict";
 const $ = s => document.querySelector(s);
 const NS = "http://www.w3.org/2000/svg";
-const KEY = "diseno_habitacion_v3";
+const KEY = "diseno_habitacion_v4";
 
 // Catálogo (cm): w = ancho, d = fondo
 const CAT = {
   "Dormitorio":[["Cama 90",90,200],["Cama 135",135,200],["Cama 150",150,200],["Cama 160",160,200],["Mesita noche",40,35],["Cómoda",100,45],["Armario 2 puertas",100,55],["Armario 3 puertas",150,55],["Armario 4 puertas",200,60],["Cuna",70,130]],
-  "Estudio":[["Escritorio 140",140,60],["Escritorio 120",120,60],["Silla",45,45],["Estantería",80,30],["Librería 2m",200,30],["Mesa de trabajo",160,80]],
+  "Estudio":[["Escritorio 140",140,60],["Escritorio en L",150,130,"L"],["Escritorio 120",120,60],["Silla",45,45],["Estantería",80,30],["Librería 2m",200,30],["Mesa de trabajo",160,80]],
   "Salón":[["Sofá 2 plazas",160,90],["Sofá 3 plazas",210,90],["Mueble TV",150,40],["Mesa centro",100,50],["Butaca",80,80],["Mesa comedor",160,90]],
   "Aperturas":[["Puerta 72",72,10,"door"],["Puerta 82",82,10,"door"],["Puerta 92",92,10,"door"],["Ventana 100",100,12,"window"],["Ventana 150",150,12,"window"]],
   "Otros":[["Texto (rótulo)",120,20,"text"],["Radiador",80,10],["Alfombra 160x230",160,230],["Pilar",30,30],["Bloque libre",100,100]]
@@ -157,13 +152,16 @@ function drawItem(it){
   } else if(it.kind==="window"){
     el("rect",{x:-it.w/2,y:-it.d/2,width:it.w,height:it.d,fill:"#bfe3f5",stroke:stroke,"stroke-width":s?2:1},g);
     el("line",{x1:-it.w/2,y1:0,x2:it.w/2,y2:0,stroke:"#4a90b8"},g);
+  } else if(it.shape==="L"){
+    const a=Math.min(it.a,it.d),b=Math.min(it.b,it.w),x0=-it.w/2,y0=-it.d/2;
+    el("path",{d:`M ${x0} ${y0} h ${it.w} v ${a} H ${x0+b} V ${-y0} H ${x0} Z`,fill:it.color,"fill-opacity":.75,stroke:stroke,"stroke-width":s?2.5:1,"stroke-linejoin":"round"},g);
   } else {
     el("rect",{x:-it.w/2,y:-it.d/2,width:it.w,height:it.d,fill:it.color,"fill-opacity":.75,stroke:stroke,"stroke-width":s?2.5:1,rx:2},g);
   }
   // etiqueta: sigue el eje largo del mueble y se ajusta de tamaño para caber
-  const label=it.kind==="text"?it.name:it.kind?(s?it.name:""):`${it.name} ${it.w}×${it.d}`;
+  const label=it.kind==="text"?it.name:it.kind?(s?it.name:""):it.shape==="L"?"Escritorio en L":`${it.name} ${it.w}×${it.d}`;
   const vert=it.rot%180===90, along=vert?it.d>=0&&it.w:it.w;
-  const t=el("text",{x:0,y:it.kind==="door"?-it.w/2:0,"text-anchor":"middle","dominant-baseline":"middle","pointer-events":"none",fill:"#111"},g);
+  const t=el("text",{x:0,y:it.kind==="door"?-it.w/2:it.shape==="L"?(-it.d/2+Math.min(it.a,it.d)/2):0,"text-anchor":"middle","dominant-baseline":"middle","pointer-events":"none",fill:"#111"},g);
   t.setAttribute("transform",`scale(${it.fx?-1:1} ${it.fy?-1:1})`+(vert?"":` rotate(${-it.rot})`));
   t.textContent=label;
   let fs=Math.max(5,Math.min(10,(along*1.6)/Math.max(1,label.length)));
@@ -196,13 +194,13 @@ function buildLib(){
     const g=document.createElement("div"); g.className="grid"; L.appendChild(g);
     for(const [name,w,d,kind] of list){
       const b=document.createElement("button"); b.innerHTML=`${name}<small>${w}×${d}</small>`;
-      b.onclick=()=>addItem({name,w,d,kind,color:COLORS[cat]});
+      b.onclick=()=>addItem(kind==="L"?{name,w,d,shape:"L",a:60,b:60,color:COLORS[cat],h:75}:{name,w,d,kind,color:COLORS[cat]});
       g.appendChild(b);
     }
   }
 }
 function addItem(o){
-  const it={id:uid++,name:o.name,w:o.w,d:o.d,kind:o.kind||null,color:o.color||"#999",x:sn(S.room.w/2),y:sn(S.room.h/2),rot:0,fx:false,fy:false};
+  const it={id:uid++,name:o.name,w:o.w,d:o.d,kind:o.kind||null,shape:o.shape,a:o.a,b:o.b,h:o.h,color:o.color||"#999",x:sn(S.room.w/2),y:sn(S.room.h/2),rot:0,fx:false,fy:false};
   S.items.push(it); sel=it.id; commit(); render();
 }
 function props(){
@@ -215,8 +213,9 @@ function props(){
   } else {
     P.innerHTML=`<h3>${o.kind?"Apertura":"Elemento"}</h3>
     <div class="row"><label>Nombre</label><input id="p-name" value="${o.name}"></div>
-    <div class="row"><label>Ancho cm</label><input id="p-w" type="number" value="${o.w}"></div>
-    <div class="row"><label>Fondo cm</label><input id="p-d" type="number" value="${o.d}"></div>
+    <div class="row"><label>${o.shape==="L"?"Ancho total":"Ancho cm"}</label><input id="p-w" type="number" value="${o.w}"></div>
+    <div class="row"><label>${o.shape==="L"?"Largo ala":"Fondo cm"}</label><input id="p-d" type="number" value="${o.d}"></div>
+    ${o.shape==="L"?`<div class="row"><label>Fondo tablero</label><input id="p-a" type="number" value="${o.a}"></div><div class="row"><label>Fondo ala</label><input id="p-b" type="number" value="${o.b}"></div>`:""}
     <div class="row"><label>X (centro)</label><input id="p-x" type="number" value="${Math.round(o.x)}"></div>
     <div class="row"><label>Y (centro)</label><input id="p-y" type="number" value="${Math.round(o.y)}"></div>
     <div class="row"><label>Giro °</label><input id="p-r" type="number" value="${o.rot}"></div>
@@ -225,7 +224,7 @@ function props(){
     <div class="btns"><button id="p-rot">Girar 90° (R)</button><button id="p-m15">−15°</button><button id="p-p15">+15°</button><button id="p-fx">Espejo H</button><button id="p-fy">Espejo V</button><button id="p-dup">Duplicar</button><button id="p-del">Eliminar</button></div>`;
     const bind=(id,f)=>{ const e=$(id); if(e) e.onchange=ev=>{ f(ev.target.value); commit(); render(); }; };
     bind("#p-name",v=>o.name=v); bind("#p-w",v=>o.w=Math.max(5,+v||o.w)); bind("#p-d",v=>o.d=Math.max(5,+v||o.d));
-    bind("#p-x",v=>o.x=+v); bind("#p-y",v=>o.y=+v); bind("#p-r",v=>o.rot=((+v%360)+360)%360); bind("#p-c",v=>o.color=v); bind("#p-h",v=>o.h=+v); bind("#p-z",v=>o.z=+v);
+    bind("#p-x",v=>o.x=+v); bind("#p-y",v=>o.y=+v); bind("#p-r",v=>o.rot=((+v%360)+360)%360); bind("#p-c",v=>o.color=v); bind("#p-a",v=>o.a=Math.max(10,+v||o.a)); bind("#p-b",v=>o.b=Math.max(10,+v||o.b)); bind("#p-h",v=>o.h=+v); bind("#p-z",v=>o.z=+v);
     $("#p-rot").onclick=()=>rot(o); $("#p-m15").onclick=()=>{o.rot=(o.rot+345)%360;commit();render()}; $("#p-p15").onclick=()=>{o.rot=(o.rot+15)%360;commit();render()}; $("#p-fx").onclick=()=>{o.fx=!o.fx;commit();render()}; $("#p-fy").onclick=()=>{o.fy=!o.fy;commit();render()};
     $("#p-dup").onclick=()=>dup(o);
   }
@@ -299,44 +298,9 @@ $("#png").onclick=()=>{
   img.src="data:image/svg+xml;charset=utf-8,"+encodeURIComponent(new XMLSerializer().serializeToString(c));
 };
 
-/* Plano inicial según croquis (cm). X = largo (0 = pared de la puerta doble), Y = ancho (0 = pared de la ventana) */
-function planoInicial(){
-  let n=1; const W=(x1,y1,x2,y2)=>({id:n++,x1,y1,x2,y2,t:10});
-  const I=(name,w,d,kind,x,y,rot,fx,color)=>({id:n++,name,w,d,kind,x,y,rot,fx:!!fx,fy:false,color:color||"#999"});
-  const base={room:{w:680,h:400},
-    walls:[W(380,0,380,320),W(200,320,460,320),W(200,320,200,400),W(460,320,460,400)],
-    items:[
-      I("Ventana 110",110,12,"window",185,-6,0),
-      I("Puerta 60 (hoja 1)",60,10,"door",-6,190,90,false),
-      I("Puerta 60 (hoja 2)",60,10,"door",-6,250,90,true),
-      I("Puerta 70",70,10,"door",280,406,0),
-      I("Puerta 70 (a gamer)",70,10,"door",460,360,90),
-      I("DORMIR (a retornar)",160,24,"text",110,300,0),
-      I("GAMER (secundaria)",200,30,"text",540,150,0)
-    ]};
-  n=100; base.items.push(...mobiliario("A",()=>n++));
-  return base;
-}
-/* Propuestas de distribución. [nombre, ancho, fondo, x, y, giro°, color, {h alto, z elevación}] */
-const MC="#7aa7e0", MA="#e0b36a", MD="#8fc79a", MT="#4b5563";
-const LAYOUTS={
-  A:{label:"A · Cabecero en tabique (este), TV en pared oeste",items:[
-    ["Cama 140",140,200,275,170,90,MC,{h:45}],["Mesita noche",40,35,355,80,90,MC,{h:50}],
-    ["TV 55\" colgada",123,6,4,75,90,MT,{h:71,z:75,fy:1}],
-    ["Armario 140x180",140,60,70,370,0,MA,{h:180,fy:1}],["Armario nuevo (a diseñar)",100,60,305,30,0,MA,{h:200}],
-    ["Escritorio 120",120,60,185,30,0,MD,{h:75}]]},
-  B:{label:"B · Cabecero en pared norte (bajo ventana), TV en pared sur",items:[
-    ["Cama 140",140,200,150,100,0,MC,{h:45}],["Mesita noche",40,35,240,17,0,MC,{h:50}],
-    ["TV 55\" colgada",123,6,130,397,0,MT,{h:71,z:75,fy:1}],
-    ["Armario 140x180",140,60,345,75,90,MA,{h:180}],["Armario nuevo (a diseñar)",100,60,345,200,90,MA,{h:200}],
-    ["Escritorio 120",120,60,30,70,90,MD,{h:75}]]}
-};
-function mobiliario(k,nextId){
-  return LAYOUTS[k].items.map(([name,w,d,x,y,rot,color,ex])=>({id:nextId(),name,w,d,kind:null,x,y,rot,fx:false,fy:!!ex.fy,color,h:ex.h||0,z:ex.z||0}));
-}
-function aplicarLayout(k){
-  if(!LAYOUTS[k])return; S.items=S.items.filter(i=>i.kind); S.items.push(...mobiliario(k,()=>uid++)); sel=null; commit(); render();
-}
+/* Plano DEFINITIVO (exportado por el usuario, cm). X = largo, Y = ancho. Escritorio en L: w×d = caja total, a = fondo del tablero principal, b = fondo del ala */
+const DEFINITIVO = {"room": {"w": 680, "h": 400}, "walls": [{"id": 1, "x1": 380, "y1": 0, "x2": 380, "y2": 320, "t": 10}, {"id": 2, "x1": 155, "y1": 320, "x2": 425, "y2": 320, "t": 10}, {"id": 3, "x1": 165, "y1": 320, "x2": 165, "y2": 400, "t": 10}, {"id": 4, "x1": 430, "y1": 320, "x2": 430, "y2": 400, "t": 10}], "items": [{"id": 5, "name": "Ventana 110", "w": 110, "d": 12, "kind": "window", "x": 180, "y": -5, "rot": 0, "fx": false, "fy": false, "color": "#999"}, {"id": 8, "name": "Puerta 70", "w": 70, "d": 10, "kind": "door", "x": 235, "y": 405, "rot": 0, "fx": true, "fy": false, "color": "#999"}, {"id": 9, "name": "Puerta 70 (a gamer)", "w": 70, "d": 10, "kind": "door", "x": 430, "y": 360, "rot": 90, "fx": true, "fy": false, "color": "#999"}, {"id": 10, "name": "DORMIR (a retornar)", "w": 160, "d": 24, "kind": "text", "x": 150, "y": 250, "rot": 0, "fx": false, "fy": false, "color": "#999"}, {"id": 11, "name": "GAMER (secundaria)", "w": 200, "d": 30, "kind": "text", "x": 540, "y": 150, "rot": 0, "fx": false, "fy": false, "color": "#999"}, {"id": 106, "name": "Puerta 72", "w": 72, "d": 10, "kind": "door", "color": "#fff", "x": 165, "y": 360, "rot": 270, "fx": true, "fy": true}, {"id": 107, "name": "Puerta 92", "w": 92, "d": 10, "kind": "door", "color": "#fff", "x": -5, "y": 210, "rot": 90, "fx": false, "fy": false}, {"id": 120, "name": "Cama 140", "w": 140, "d": 200, "kind": null, "x": 305, "y": 215, "rot": 180, "fx": false, "fy": false, "color": "#7aa7e0", "h": 45, "z": 0}, {"id": 122, "name": "TV 55\" colgada", "w": 123, "d": 6, "kind": null, "x": 305, "y": 3, "rot": 180, "fx": false, "fy": true, "color": "#4b5563", "h": 71, "z": 75}, {"id": 123, "name": "Armario 140x180", "w": 140, "d": 60, "kind": null, "x": 30, "y": 70, "rot": 90, "fx": false, "fy": true, "color": "#e0b36a", "h": 180, "z": 0}, {"id": 125, "name": "Escritorio en L", "shape": "L", "w": 150, "d": 130, "a": 60, "b": 60, "kind": null, "x": 75, "y": 335, "rot": 0, "fx": false, "fy": true, "color": "#8fc79a", "h": 75, "z": 0}]};
+function planoInicial(){ return JSON.parse(JSON.stringify(DEFINITIVO)); }
 /* ---------- Vista 3D (three.js, cm → unidades; plano X→x, plano Y→z, altura→y) ---------- */
 var V3={on:false,dirty:false,wallH:110,cmp:false,cam:"orbit"};
 const DEFH={Cama:50,Mesita:50,Armario:200,Escritorio:75,Mesa:75,Silla:90,Sofá:85,Cómoda:85,Estantería:180,Librería:200,Butaca:85,Mueble:50,TV:70,Radiador:60,Pilar:250,Alfombra:1,Cuna:90,Bloque:100};
@@ -386,6 +350,10 @@ function furniture(g,it){
   } else if(/^Armario|^Estantería|^Librería|^Cómoda/.test(n)){
     g.add(box3(w,h,d,col,0,h/2,0)); const k=Math.max(2,Math.round(w/50));
     for(let i=1;i<k;i++){ const x=-w/2+i*w/k; g.add(box3(.8,h-6,1,0x6b5a40,x,h/2,d/2+.3)); g.add(box3(1.5,22,1.5,0x333333,x-4,h*.5,d/2+1)); g.add(box3(1.5,22,1.5,0x333333,x+4,h*.5,d/2+1)); }
+  } else if(it.shape==="L"){
+    const a=Math.min(it.a,d),b=Math.min(it.b,w), x0=-w/2, zt=-d/2;
+    g.add(box3(w,3,a,col,0,h-1.5,zt+a/2)); g.add(box3(b,3,d-a,col,x0+b/2,h-1.5,zt+a+(d-a)/2));
+    for(const [lx,lz] of [[w/2-4,zt+4],[x0+4,zt+4],[w/2-4,zt+a-4],[x0+b-4,zt+a-4],[x0+4,d/2-4],[x0+b-4,d/2-4]]) g.add(box3(4,h-3,4,0x555555,lx,(h-3)/2,lz));
   } else if(/^Escritorio|^Mesa/.test(n)&&!/noche/.test(n)){
     g.add(box3(w,3,d,col,0,h-1.5,0)); for(const sx of[-1,1])for(const sz of[-1,1]) g.add(box3(4,h-3,4,0x555555,sx*(w/2-4),(h-3)/2,sz*(d/2-4)));
   } else if(/^TV/.test(n)){
@@ -405,7 +373,7 @@ function init3D(){
 }
 function setCam(k){
   V3.cam=k; const W=S.room.w,H=S.room.h, bed=S.items.find(i=>/^Cama/.test(i.name)), tv=S.items.find(i=>/^TV/.test(i.name));
-  const f=V3.cmp?1.45:1; let p=[W/2+100*f,600*f,H+470*f], t=[W/2,0,H/2];
+  const f=1; let p=[W/2+100*f,600*f,H+470*f], t=[W/2,0,H/2];
   if(k==="top"){ p=[W/2,Math.max(W,H)*1.25*f,H/2+1]; }
   if(k==="door"){ p=[18,165,H*.55]; t=[W*.6,90,H*.45]; }
   if(k==="bed"){ if(bed){ p=[bed.x,95,bed.y]; } t=tv?[tv.x,(tv.z||75)+(tv.h||71)/2,tv.y]:[W/2,90,H/2]; }
@@ -414,8 +382,7 @@ function setCam(k){
 function loop3D(tok){
   if(!V3.on||tok!==V3.tok) return; requestAnimationFrame(()=>loop3D(tok));
   if(V3.dirty){ V3.dirty=false; SC3.forEach(s=>s.traverse(o=>{ if(o.geometry)o.geometry.dispose(); if(o.material)o.material.dispose(); }));
-    const fixed=S.items.filter(i=>i.kind);
-    SC3=V3.cmp?["A","B"].map(k=>buildScene(fixed.concat(mobiliario(k,()=>0)))):[buildScene(S.items)]; }
+    SC3=[buildScene(S.items)]; }
   CT.update(); const w=R3.domElement.clientWidth,h=R3.domElement.clientHeight, n=SC3.length;
   for(let i=0;i<n;i++){ const vw=Math.floor(w/n); R3.setViewport(i*vw,0,vw,h); R3.setScissor(i*vw,0,vw,h); CAM3.aspect=vw/h; CAM3.updateProjectionMatrix(); R3.render(SC3[i],CAM3); }
 }
@@ -427,7 +394,6 @@ function toggle3D(){
 $("#b3d").onclick=toggle3D;
 $("#v3cam").onchange=e=>setCam(e.target.value);
 $("#v3wall").onchange=e=>{ V3.wallH=+e.target.value; V3.dirty=true; };
-$("#v3cmp").onchange=e=>{ V3.cmp=e.target.checked; $("#v3l").hidden=!V3.cmp; V3.dirty=true; if(V3.cam==="orbit"||V3.cam==="top") setCam(V3.cam); };
 $("#v3png").onclick=()=>{ V3.dirty=true; requestAnimationFrame(()=>R3.domElement.toBlob(b=>download(b,"habitacion-3d.png"))); };
 
 /* ---------- init ---------- */
@@ -436,8 +402,6 @@ $("#v3png").onclick=()=>{ V3.dirty=true; requestAnimationFrame(()=>R3.domElement
   if(j){ try{ S=JSON.parse(j); }catch{} }
   else { S=planoInicial(); }
   uid=1+Math.max(0,...S.items.map(i=>i.id),...S.walls.map(w=>w.id));
-  const L=$("#lay"); for(const k in LAYOUTS) L.insertAdjacentHTML("beforeend",`<option value="${k}">${LAYOUTS[k].label}</option>`);
-  L.onchange=()=>{ if(L.value&&confirm("Esto recoloca todo el mobiliario según la propuesta (puedes deshacer con Ctrl+Z). ¿Continuar?")) aplicarLayout(L.value); L.value=""; };
   hist=[snapshot()]; buildLib(); fit(); addEventListener("resize",fit);
 })();
 </script>
