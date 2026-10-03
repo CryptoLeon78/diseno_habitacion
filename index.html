@@ -34,6 +34,26 @@ svg{width:100%;height:100%;display:block;touch-action:none;user-select:none;back
 .row select{width:100%;padding:4px 6px;border:1px solid var(--line);border-radius:5px;background:var(--bg)}
 .cf{display:block;width:100%;text-align:left;margin:4px 0;border-color:#dc262655}
 .cf small{display:block;color:var(--mut);font-size:11px}
+#bom{position:fixed;inset:0;background:#0008;z-index:50;display:flex;align-items:center;justify-content:center}
+#bom[hidden]{display:none}
+#bombox{background:var(--panel);border:1px solid var(--line);border-radius:10px;width:min(1180px,97vw);height:min(760px,93vh);display:grid;grid-template-columns:270px 1fr;overflow:hidden}
+#bomside{padding:14px;overflow:auto;border-right:1px solid var(--line)}
+#bomside h3{margin:14px 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut)}
+#bomside h3:first-child{margin-top:0}
+#bommain{padding:14px;overflow:auto}
+.bomhead{display:flex;gap:6px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+#bomtable{width:100%;border-collapse:collapse;font-size:13px}
+#bomtable th{text-align:left;font-size:11px;text-transform:uppercase;color:var(--mut);padding:4px 6px;border-bottom:1px solid var(--line)}
+#bomtable td{padding:5px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+#bomtable td small{display:block;color:var(--mut);font-size:11px}
+#bomtable td.n{text-align:right;white-space:nowrap}
+#bomtable tr.bg td{background:var(--bg);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--mut)}
+#bomtable tr.have td{opacity:.45}
+.pr{width:76px;padding:3px 5px;border:1px solid var(--line);border-radius:5px;background:var(--bg)}
+.bt{border:1px solid var(--line);border-radius:6px;padding:6px 8px;margin:5px 0;font-size:12px}
+.bt label{margin-right:6px;white-space:nowrap}
+@media print{body.print-bom>*:not(#bom){display:none!important}body.print-bom{display:block;height:auto;overflow:visible}body.print-bom #bom{position:static;background:#fff;display:block}body.print-bom #bombox{display:block;height:auto;width:auto;border:0}body.print-bom #bomside,body.print-bom .bomhead,body.print-bom .pr{display:none}body.print-bom #bommain{overflow:visible}body.print-bom td,body.print-bom th{color:#000}}
+@media (max-width:760px){#bombox{grid-template-columns:1fr;grid-template-rows:auto 1fr}}
 #exp{position:fixed;inset:0;background:#0008;z-index:50;display:flex;align-items:center;justify-content:center}
 #exp[hidden]{display:none}
 #expbox{background:var(--panel);border:1px solid var(--line);border-radius:10px;width:min(1100px,96vw);height:min(720px,92vh);display:grid;grid-template-columns:300px 1fr;overflow:hidden}
@@ -65,7 +85,7 @@ svg{width:100%;height:100%;display:block;touch-action:none;user-select:none;back
   <button id="fit">Ajustar vista</button><button id="b3d">Vista 3D</button>
   <span style="flex:1"></span>
   <button id="save">Guardar JSON</button><button id="load">Abrir JSON</button>
-  <button id="bexp" class="on">Exportar PDF / vistas…</button><button id="png">PNG 2D rápido</button><button id="reset">Plano inicial</button><button id="clear">Vaciar</button>
+  <button id="bbom" class="on">Lista de compra</button><button id="bexp" class="on">Exportar PDF / vistas…</button><button id="png">PNG 2D rápido</button><button id="reset">Plano inicial</button><button id="clear">Vaciar</button>
   <input id="file" type="file" accept=".json" hidden>
 </header>
 <aside id="lib"></aside>
@@ -79,6 +99,26 @@ svg{width:100%;height:100%;display:block;touch-action:none;user-select:none;back
     <div id="v3c"></div>
   </div></div>
 <aside id="props"></aside>
+<div id="bom" hidden>
+  <div id="bombox">
+    <div id="bomside">
+      <h3>Lista de compra</h3>
+      <div class="row"><label>Altura techo cm</label><input id="b-techo" type="number"></div>
+      <div class="row"><label>Capas/cara</label><input id="b-capas" type="number" min="1" max="2"></div>
+      <div class="row"><label>Merma %</label><input id="b-merma" type="number"></div>
+      <div class="row"><label>Caja suelo m²</label><input id="b-caja" type="number" step="0.1"></div>
+      <h3>Incluir</h3><div id="bom-groups"></div>
+      <h3>Tabiques de pladur</h3><div id="bom-tab"></div>
+      <p style="color:var(--mut);font-size:12px">«Estructura» = canales y montantes. El tabique 1 se marca como ya montado. Pon precios por línea y marca «ya lo tengo» para excluir de la suma.</p>
+    </div>
+    <div id="bommain">
+      <div class="bomhead"><span id="bom-sum" style="color:var(--mut);font-size:12px"></span><span style="flex:1"></span><button id="bom-csv" class="on">Descargar CSV</button><button id="bom-print">Imprimir / PDF</button><button id="bom-close">Cerrar</button></div>
+      <table id="bomtable"><thead><tr><th>Concepto</th><th>Cant.</th><th>Ud.</th><th>€/ud</th><th>Total</th><th title="Ya lo tengo">Tengo</th></tr></thead><tbody id="bom-body"></tbody>
+      <tfoot><tr><td colspan="4" style="text-align:right"><b>Total estimado</b></td><td class="n"><b id="bom-total"></b></td><td></td></tr></tfoot></table>
+      <p style="color:var(--mut);font-size:12px">Cantidades orientativas calculadas del plano (merma incluida). Confírmalas con tu proveedor antes de comprar.</p>
+    </div>
+  </div>
+</div>
 <div id="exp" hidden>
   <div id="expbox">
     <div id="expform">
@@ -880,6 +920,107 @@ function openExport(){ $("#exp").hidden=false; $("#x-status").textContent=""; up
 $("#bexp").onclick=openExport; $("#x-close").onclick=()=>{ $("#exp").hidden=true; };
 document.querySelectorAll("#exp input,#exp select").forEach(e=>e.addEventListener("change",updatePreview));
 $("#x-pdf").onclick=()=>runExport("pdf"); $("#x-zip").onclick=()=>runExport("zip");
+
+/* ---------- Lista de compra / mediciones ---------- */
+const BOMKEY="diseno_habitacion_compra_v1";
+let BC={techo:250,capas:1,merma:10,caja:2.2,prices:{},have:{},tab:{},groups:{mob:true,pla:true,car:true,sue:true,pin:true,obra:true}};
+try{ Object.assign(BC,JSON.parse(localStorage.getItem(BOMKEY)||"{}")); }catch{}
+const saveBC=()=>{ try{localStorage.setItem(BOMKEY,JSON.stringify(BC))}catch{} };
+const fmt=(n,d=2)=>Number(n).toLocaleString("es-ES",{minimumFractionDigits:0,maximumFractionDigits:d});
+function openingsOnTabique(w){        // puertas/ventanas sobre un tabique ortogonal
+  const hz=w.y1===w.y2, vt=w.x1===w.x2; if(!hz&&!vt) return [];
+  return S.items.filter(i=>(i.kind==="door"||i.kind==="window")&&((i.rot%180===0)===hz)&&Math.abs((hz?i.y-w.y1:i.x-w.x1))<=w.t/2+10&&(hz?i.x:i.y)>=Math.min(hz?w.x1:w.y1,hz?w.x2:w.y2)-1&&(hz?i.x:i.y)<=Math.max(hz?w.x1:w.y1,hz?w.x2:w.y2)+1);
+}
+function tabCfg(id){ return BC.tab[id]||(BC.tab[id]={est:id!==1,pla:true,ais:true}); }   // el tabique nº1 ya tiene los montantes puestos
+function buildBOM(){
+  const H=BC.techo/100, cap=BC.capas, mer=1+BC.merma/100, lines=[], R=room(), L=(g,key,name,qty,unit,detail,extra={})=>lines.push({g,key,name,qty,unit,detail,...extra});
+  // ---- Mobiliario
+  if(BC.groups.mob){ const m=new Map(); for(const i of S.items){ if(i.kind) continue;
+      const k=i.shape==="L"?`${i.name} ${i.w}×${i.d} (tablero ${i.a}, ala ${i.b})`:`${i.name} ${i.w}×${i.d}${i.h?`×${i.h} alto`:""}`;
+      m.set(k,(m.get(k)||0)+1); }
+    for(const [k,q] of [...m].sort()) L("mob","mob:"+k,k,q,"ud",/Armario 4 puertas.*319/.test(k)?"Medida especial: composición a medida":""); }
+  // ---- Tabiques de pladur
+  let canal=0,mont=0,placaM2=0,aisM2=0,banda=0,tacos=0,cant=0,estTab=0; const tabInfo=[];
+  S.walls.forEach((w,idx)=>{ const len=wLen(w)/100, op=openingsOnTabique(w), doors=op.filter(o=>o.kind==="door"), dW=doors.reduce((a,o)=>a+o.w/100,0), c=tabCfg(w.id);
+    const gross=len*H-doors.reduce((a,o)=>a+o.w/100*2.05,0)-op.filter(o=>o.kind==="window").reduce((a,o)=>a+o.w/100*.45,0);
+    tabInfo.push({w,len,doors:doors.length,c});
+    if(c.est){ estTab++; canal+=2*len+dW; mont+=Math.floor(Math.max(0,len-dW)/.4)+1+2*doors.length; banda+=2*len+2*H; tacos+=Math.ceil(2*len/.6)+2*Math.ceil(H/.6); cant+=doors.length*2*H; }
+    if(c.pla) placaM2+=2*gross*cap; if(c.ais) aisM2+=gross; });
+  if(BC.groups.pla){
+    const t=S.walls.length?S.walls[0].t:10, mw=[34,48,70,90,100].reduce((p,q)=>Math.abs(q-(t*10-2*cap*13))<Math.abs(p-(t*10-2*cap*13))?q:p);
+    if(canal) L("pla","pla:canal",`Canal U ${mw} mm (3 m)`,Math.ceil(canal*mer/3),"barras",`${fmt(canal)} m lineales (suelo, techo y dinteles)`);
+    if(mont) L("pla","pla:mont",`Montante C ${mw} mm (3 m)`,Math.ceil(mont*mer*1.0),"barras",`${mont} montantes cada 40 cm + jambas de puerta`);
+    if(banda) L("pla","pla:banda","Banda acústica / estanca 70 mm (30 m)",Math.ceil(banda/30),"rollos",`${fmt(banda)} m`);
+    if(tacos) L("pla","pla:tacos","Tacos de anclaje + tornillo (cada 60 cm)",Math.ceil(tacos*1.1/100)*100,"ud","");
+    if(cant) L("pla","pla:cant","Cantonera / guardavivos metálico (3 m)",Math.ceil(cant/3),"barras","jambas de puertas");
+    if(placaM2){ L("pla","pla:placa",`Placa de yeso laminado 13 mm 1200×2500 (${cap} capa${cap>1?"s":""}/cara)`,Math.ceil(placaM2*mer/3),"placas",`${fmt(placaM2)} m² netos + ${BC.merma}% de merma`);
+      L("pla","pla:tornillos","Tornillos placa-metal 3,5×25 (caja 1000)",Math.max(1,Math.ceil(placaM2*18/1000)),"cajas","≈18 ud/m²");
+      L("pla","pla:cinta","Cinta de juntas (150 m)",Math.max(1,Math.ceil(placaM2*1.6/150)),"rollos","");
+      L("pla","pla:pasta","Pasta de juntas (saco 20 kg)",Math.max(1,Math.ceil(placaM2*.45/20)),"sacos",`≈0,45 kg/m²`); }
+    if(aisM2) L("pla","pla:aisl",`Lana mineral ${mw>=70?60:40} mm (rollo 7,2 m²)`,Math.ceil(aisM2*1.05/7.2),"rollos",`${fmt(aisM2)} m² de tabique`); }
+  // ---- Carpintería
+  const ho=[]; if(BC.groups.car){ const m=new Map(); for(const i of S.items){ if(i.kind!=="door"&&i.kind!=="window") continue;
+      const k=i.kind==="window"?`Ventana aluminio antracita ${i.w}×45 cm`:`Puerta de paso, hueco ${i.w} cm`; m.set(k,(m.get(k)||0)+1); }
+    for(const [k,q] of [...m].sort()) L("car","car:"+k,k,q,"ud",/^Ventana/.test(k)?"Aluminio gris antracita (RAL 7016), vidrio doble":"Incluye marco/premarco y herrajes"); }
+  // ---- Suelo, rodapié
+  const doorsAll=S.items.filter(i=>i.kind==="door"), perim=(()=>{ let p=0; for(const ow of ["n","s","w","e"]){ const hz=ow==="n"||ow==="s"; for(const q of wallPieces(ow)){ const lo=hz?R.x0:R.y0, hi=hz?R.x0+R.w:R.y0+R.h, len=Math.max(0,Math.min(q.b,hi)-Math.max(q.a,lo)); p+=len; if(q.dir==="in") p+=2*q.t; } } for(const w of S.walls) p+=2*wLen(w); return p/100; })();
+  const floor=areaM2(), dwTotal=doorsAll.reduce((a,o)=>a+o.w/100,0);
+  if(BC.groups.sue){ L("sue","sue:parq",`Parquet/laminado gris efecto madera (caja ${BC.caja} m²)`,Math.ceil(floor*mer/BC.caja),"cajas",`${fmt(floor)} m² + ${BC.merma}% de merma`);
+    L("sue","sue:sub","Lámina subsuelo (rollo 15 m²)",Math.ceil(floor*1.05/15),"rollos","");
+    L("sue","sue:rod","Rodapié (barra 2,4 m)",Math.ceil((perim-dwTotal)*1.05/2.4),"barras",`${fmt(perim-dwTotal)} m (perímetro − puertas)`);
+    if(doorsAll.length) L("sue","sue:perfil","Perfil de transición en puertas",doorsAll.length,"ud",""); }
+  // ---- Pintura
+  const paredes=Math.max(0,perim*H-doorsAll.reduce((a,o)=>a+o.w/100*2.05,0)-S.items.filter(i=>i.kind==="window").reduce((a,o)=>a+o.w/100*.45,0)), techo=floor;
+  if(BC.groups.pin){ const tot=paredes+techo;
+    L("pin","pin:imp","Imprimación / fijador (L)",Math.ceil(tot/12),"L",`${fmt(tot)} m² (paredes ${fmt(paredes)} + techo ${fmt(techo)})`);
+    L("pin","pin:pint","Pintura plástica (2 manos, 15 L/bote)",Math.ceil(tot*2/10/15),"botes",`≈${fmt(tot*2/10)} L · 10 m²/L por mano`);
+    L("pin","pin:cinta","Cinta de carrocero, plástico y protección",1,"lote",""); }
+  // ---- Obra de albañilería (informativo)
+  if(BC.groups.obra){ for(const ow of ["n","s","w","e"]){ const hz=ow==="n"||ow==="s", lo=hz?R.x0:R.y0, hi=hz?R.x0+R.w:R.y0+R.h;
+      for(const q of wallPieces(ow)){ if(q.dir!=="in") continue; const len=Math.max(0,Math.min(q.b,hi)-Math.max(q.a,lo))/100, vol=len*q.t/100*H;
+        L("obra",`obra:${ow}:${q.a}`,`Muro hacia dentro, pared ${{n:"norte",s:"sur",w:"oeste",e:"este"}[ow]}`,Number(vol.toFixed(2)),"m³",`${fmt(len)} m × ${q.t} cm × ${fmt(H)} m · material y mortero a definir`,{info:true}); } } }
+  return {lines,tabInfo,estTab,floor,perim,paredes};
+}
+const BOMG={mob:"Mobiliario",pla:"Tabiques de pladur",car:"Carpintería",sue:"Suelo y rodapié",pin:"Pintura",obra:"Obra de albañilería"};
+function lineTotal(l){ if(l.info||BC.have[l.key]) return 0; return (+BC.prices[l.key]||0)*l.qty; }
+function renderBOM(){
+  const B=buildBOM(), host=$("#bom-tab"), tb=$("#bom-body");
+  host.innerHTML=B.tabInfo.map(({w,len,doors,c})=>`<div class="bt"><b>Tabique ${w.id}</b> · ${fmt(len)} m${doors?` · ${doors} puerta${doors>1?"s":""}`:""}<br>
+    <label><input type="checkbox" data-t="${w.id}" data-f="est" ${c.est?"checked":""}> estructura</label>
+    <label><input type="checkbox" data-t="${w.id}" data-f="pla" ${c.pla?"checked":""}> placas</label>
+    <label><input type="checkbox" data-t="${w.id}" data-f="ais" ${c.ais?"checked":""}> aislante</label></div>`).join("")||"<p style='color:var(--mut)'>Sin tabiques</p>";
+  let html="", grand=0;
+  for(const g of Object.keys(BOMG)){ const ls=B.lines.filter(l=>l.g===g); if(!ls.length) continue;
+    html+=`<tr class="bg"><td colspan="7">${BOMG[g]}</td></tr>`;
+    for(const l of ls){ const t=lineTotal(l); grand+=t;
+      html+=`<tr class="${BC.have[l.key]?"have":""}"><td>${esc(l.name)}${l.detail?`<small>${esc(l.detail)}</small>`:""}</td><td class="n">${fmt(l.qty)}</td><td>${l.unit}</td>
+      <td>${l.info?"":`<input class="pr" type="number" min="0" step="0.01" data-p="${esc(l.key)}" value="${BC.prices[l.key]??""}" placeholder="€">`}</td><td class="n" data-tot="${esc(l.key)}">${l.info?"":t?fmt(t)+" €":""}</td>
+      <td>${l.info?"":`<input type="checkbox" data-h="${esc(l.key)}" ${BC.have[l.key]?"checked":""} title="Ya lo tengo">`}</td></tr>`; } }
+  tb.innerHTML=html||"<tr><td colspan='6'>Nada seleccionado</td></tr>";
+  $("#bom-total").textContent=fmt(grand)+" €"; $("#bom-sum").textContent=`${B.lines.filter(l=>!l.info).length} conceptos · suelo ${fmt(B.floor)} m² · perímetro ${fmt(B.perim)} m · paredes a pintar ${fmt(B.paredes)} m²`;
+  return B;
+}
+function bomRecalc(){ let g=0; for(const l of buildBOM().lines){ const t=lineTotal(l); g+=t; const c=document.querySelector(`[data-tot="${CSS.escape(l.key)}"]`); if(c) c.textContent=l.info?"":t?fmt(t)+" €":""; const r=document.querySelector(`[data-h="${CSS.escape(l.key)}"]`); if(r) r.closest("tr").classList.toggle("have",!!BC.have[l.key]); } $("#bom-total").textContent=fmt(g)+" €"; }
+function bomCSV(){
+  const B=buildBOM(), q=v=>`"${String(v).replace(/"/g,'""')}"`, rows=[["Categoría","Concepto","Cantidad","Unidad","Detalle","Precio unidad (€)","Total (€)","Ya lo tengo"].map(q).join(";")];
+  for(const l of B.lines) rows.push([q(BOMG[l.g]),q(l.name),fmt(l.qty),q(l.unit),q(l.detail||""),l.info?"":fmt(BC.prices[l.key]||0),l.info?"":fmt(lineTotal(l)),BC.have[l.key]?"sí":""].join(";"));
+  rows.push("",[q("TOTAL"),"","","","","",fmt(B.lines.reduce((a,l)=>a+lineTotal(l),0)),""].join(";"));
+  return new Blob(["﻿"+rows.join("\r\n")],{type:"text/csv;charset=utf-8"});
+}
+function openBOM(){
+  $("#bom").hidden=false; $("#b-techo").value=BC.techo; $("#b-capas").value=BC.capas; $("#b-merma").value=BC.merma; $("#b-caja").value=BC.caja;
+  $("#bom-groups").innerHTML=Object.entries(BOMG).map(([k,v])=>`<label class="chk"><input type="checkbox" data-g="${k}" ${BC.groups[k]?"checked":""}> ${v}</label>`).join("");
+  renderBOM();
+}
+$("#bbom").onclick=openBOM; $("#bom-close").onclick=()=>{ $("#bom").hidden=true; };
+$("#bom").addEventListener("change",e=>{ const t=e.target;
+  if(t.dataset.g){ BC.groups[t.dataset.g]=t.checked; saveBC(); renderBOM(); return; }
+  if(t.dataset.t){ tabCfg(+t.dataset.t)[t.dataset.f]=t.checked; saveBC(); renderBOM(); return; }
+  if(t.dataset.h){ BC.have[t.dataset.h]=t.checked; saveBC(); bomRecalc(); return; }
+  if(t.dataset.p!==undefined){ BC.prices[t.dataset.p]=t.value===""?undefined:+t.value; saveBC(); bomRecalc(); return; }
+  const m={ "b-techo":"techo","b-capas":"capas","b-merma":"merma","b-caja":"caja" }[t.id]; if(m){ BC[m]=Math.max(0,+t.value||BC[m]); saveBC(); renderBOM(); } });
+$("#bom-csv").onclick=()=>download(bomCSV(),"lista-de-compra.csv");
+$("#bom-print").onclick=()=>{ document.body.classList.add("print-bom"); window.print(); setTimeout(()=>document.body.classList.remove("print-bom"),500); };
 
 /* ---------- init ---------- */
 (function init(){
