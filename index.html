@@ -71,7 +71,7 @@ svg{width:100%;height:100%;display:block;touch-action:none;user-select:none;back
 "use strict";
 const $ = s => document.querySelector(s);
 const NS = "http://www.w3.org/2000/svg";
-const KEY = "diseno_habitacion_v5";
+const KEY = "diseno_habitacion_v6";
 
 // Catálogo (cm): w = ancho, d = fondo
 const CAT = {
@@ -102,13 +102,23 @@ const el = (n,a={},p) => { const e=document.createElementNS(NS,n); for(const k i
 const wLen = w => Math.hypot(w.x2-w.x1,w.y2-w.y1);
 /* Paredes exteriores: ids -1..-4 (n,s,w,e). Cara interior en x0/y0 y x0+w/y0+h; el grosor crece hacia fuera. */
 const OW={"-1":"n","-2":"s","-3":"w","-4":"e"}, OWID={n:-1,s:-2,w:-3,e:-4};
-function room(){ const R=S.room; R.x0=R.x0||0; R.y0=R.y0||0; R.t=Object.assign({n:12,s:12,w:12,e:12},R.t); return R; }
+function room(){ const R=S.room; R.x0=R.x0||0; R.y0=R.y0||0; R.t=Object.assign({n:12,s:12,w:12,e:12},R.t); R.ext=R.ext||{}; return R; }
 function outerObj(id){ const R=room(), ow=OW[id]; return {id,outer:true,ow,t:R.t[ow],pos:ow==="n"?R.y0:ow==="s"?R.y0+R.h:ow==="w"?R.x0:R.x0+R.w}; }
 const find = id => id<0 ? outerObj(id) : (S.items.find(i=>i.id===id) || S.walls.find(w=>w.id===id));
-/* aperturas que están sobre una pared exterior (para que se muevan con ella) */
-function openingsOn(ow){ const o=outerObj(OWID[ow]), h=o.t/2+10, c=o.pos+(ow==="n"||ow==="w"?-o.t/2:o.t/2), horiz=ow==="n"||ow==="s", R=room();
-  return S.items.filter(i=>(i.kind==="door"||i.kind==="window")&&(i.rot%180===0)===horiz&&Math.abs((horiz?i.y:i.x)-c)<=h); }
-function shiftOpenings(list,horiz,d){ for(const i of list){ if(horiz)i.y+=d; else i.x+=d; } }
+/* Una pared exterior = tramos consecutivos; cada tramo tiene su grosor (el base R.t[lado] salvo tramos R.ext[lado]=[{a,b,t}] con otro grosor).
+   a/b en cm a lo largo de la pared (n/s: coordenada X; w/e: coordenada Y). */
+function wallPieces(ow){
+  const R=room(), hz=ow==="n"||ow==="s", A=hz?R.x0-R.t.w:R.y0, B=hz?R.x0+R.w+R.t.e:R.y0+R.h, ex=(R.ext[ow]||[]).filter(e=>e.b>e.a);
+  const cuts=[...new Set([A,B,...ex.flatMap(e=>[e.a,e.b]).filter(v=>v>A&&v<B)])].sort((p,q)=>p-q), out=[];
+  for(let i=0;i<cuts.length-1;i++){ const a=cuts[i],b=cuts[i+1],m=(a+b)/2, e=ex.filter(e=>m>e.a&&m<e.b).pop(), t=e?e.t:R.t[ow];
+    const pos=ow==="n"?R.y0:ow==="s"?R.y0+R.h:ow==="w"?R.x0:R.x0+R.w, fix=pos+((ow==="n"||ow==="w")?-t/2:t/2);
+    out.push({ow,a,b,t,fix,ov:!!e}); }
+  return out;
+}
+/* aperturas (puertas/ventanas) que están sobre una pared exterior; filtro opcional por tramo */
+function openingsOn(ow,pf){ const hz=ow==="n"||ow==="s";
+  return wallPieces(ow).filter(p=>!pf||pf(p)).flatMap(p=>S.items.filter(i=>(i.kind==="door"||i.kind==="window")&&(i.rot%180===0)===hz&&(hz?i.x:i.y)>=p.a-1&&(hz?i.x:i.y)<=p.b+1&&Math.abs((hz?i.y:i.x)-p.fix)<=p.t/2+10)); }
+function shiftOpenings(list,horiz,d){ for(const i of new Set(list)){ if(horiz)i.y+=d; else i.x+=d; } }
 function moveOuter(ow,newPos){
   const R=room(), o=outerObj(OWID[ow]), d=newPos-o.pos, horiz=ow==="n"||ow==="s", list=openingsOn(ow);
   if(!d) return;
@@ -119,8 +129,13 @@ function moveOuter(ow,newPos){
   shiftOpenings(list,horiz,d);
 }
 function setOuterT(ow,t){
-  const R=room(), old=R.t[ow], horiz=ow==="n"||ow==="s", list=openingsOn(ow); t=Math.max(2,t);
+  const R=room(), old=R.t[ow], horiz=ow==="n"||ow==="s", list=openingsOn(ow,p=>!p.ov); t=Math.max(2,t);
   R.t[ow]=t; shiftOpenings(list,horiz,(t-old)/2*(ow==="n"||ow==="w"?-1:1));
+}
+/* cambia el grosor de un tramo, manteniendo centradas sus aperturas */
+function setExt(ow,i,patch){
+  const R=room(), e=R.ext[ow][i], hz=ow==="n"||ow==="s", p0=wallPieces(ow).filter(p=>p.ov&&Math.abs((p.a+p.b)/2-(e.a+e.b)/2)<1e5&&p.a>=e.a-1&&p.b<=e.b+1), list=openingsOn(ow,p=>p0.some(q=>q.a===p.a&&q.b===p.b), true), old=e.t;
+  Object.assign(e,patch); if(patch.t!==undefined&&patch.t!==old) shiftOpenings(list,hz,(e.t-old)/2*(ow==="n"||ow==="w"?-1:1));
 }
 const isWall = o => o && "x1" in o;
 const isFurn = o => o && !o.outer && !isWall(o);
@@ -137,10 +152,11 @@ function render(){
   for(let y=Math.floor(vb.y/50)*50;y<vb.y+vb.h;y+=50) el("line",{x1:vb.x,y1:y,x2:vb.x+vb.w,y2:y,stroke:"currentColor","stroke-opacity":y%100?".05":".12"},g0);
   // habitación: cuatro paredes exteriores independientes + suelo
   el("rect",{x:X0,y:Y0,width:RW,height:RH,fill:"var(--panel)"},svg);
-  const OWR={n:[X0-T.w,Y0-T.n,RW+T.w+T.e,T.n],s:[X0-T.w,Y0+RH,RW+T.w+T.e,T.s],w:[X0-T.w,Y0,T.w,RH],e:[X0+RW,Y0,T.e,RH]};
-  for(const k in OWR){ const [x,y,w,h]=OWR[k], on=sel===OWID[k];
-    el("rect",{x,y,width:w,height:h,fill:"var(--wall)","data-id":OWID[k],stroke:on?"var(--acc)":"none","stroke-width":on?2.5:0,style:"cursor:move"},svg);
-    if(on){ const t=el("text",{x:x+w/2,y:y+h/2,"text-anchor":"middle","dominant-baseline":"middle","font-size":11,fill:"#fff","pointer-events":"none"},svg); t.textContent=T[k]+" cm"; } }
+  for(const k of ["n","s","w","e"]){ const on=sel===OWID[k];
+    for(const p of wallPieces(k)){
+      const r=k==="n"?[p.a,Y0-p.t,p.b-p.a,p.t]:k==="s"?[p.a,Y0+RH,p.b-p.a,p.t]:k==="w"?[X0-p.t,p.a,p.t,p.b-p.a]:[X0+RW,p.a,p.t,p.b-p.a];
+      el("rect",{x:r[0],y:r[1],width:r[2],height:r[3],fill:"var(--wall)","data-id":OWID[k],stroke:on?"var(--acc)":"none","stroke-width":on?2.5:0,style:"cursor:move"},svg);
+      if(on){ const t=el("text",{x:r[0]+r[2]/2,y:r[1]+r[3]/2,"text-anchor":"middle","dominant-baseline":"middle","font-size":11,fill:"#fff","pointer-events":"none"},svg); t.textContent=p.t+" cm"; } } }
   dimLabel(svg,X0,Y0-T.n-6,RW,0,`${RW} cm`);
   dimLabel(svg,X0-T.w-6,Y0,RH,-90,`${RH} cm`);
   // tabiques
@@ -168,7 +184,7 @@ function drawWall(w,ghost){
 function hostThickness(it){
   if(it.kind!=="door"&&it.kind!=="window") return it.d;
   const horiz=it.rot%180===0, R=room();
-  for(const ow of horiz?["n","s"]:["w","e"]){ const o=outerObj(OWID[ow]), c=o.pos+(ow==="n"||ow==="w"?-o.t/2:o.t/2); if(Math.abs((horiz?it.y:it.x)-c)<=o.t/2+10) return o.t; }
+  for(const ow of horiz?["n","s"]:["w","e"]) for(const p of wallPieces(ow)){ if((horiz?it.x:it.y)>=p.a-1&&(horiz?it.x:it.y)<=p.b+1&&Math.abs((horiz?it.y:it.x)-p.fix)<=p.t/2+10) return p.t; }
   for(const w of S.walls){ if(horiz&&w.y1===w.y2&&Math.abs(it.y-w.y1)<=w.t/2+10) return w.t; if(!horiz&&w.x1===w.x2&&Math.abs(it.x-w.x1)<=w.t/2+10) return w.t; }
   return it.d;
 }
@@ -244,9 +260,16 @@ function props(){
     P.innerHTML=`<h3>Pared exterior · ${nm}</h3>
     <div class="row"><label>Grosor cm</label><input id="p-t" type="number" value="${o.t}"></div>
     <div class="row"><label>Cara interior ${hz?"Y":"X"}</label><input id="p-pos" type="number" value="${o.pos}"></div>
+    <h3>Tramos con otro grosor (${hz?"X":"Y"} cm)</h3>
+    ${(room().ext[o.ow]||[]).map((e,i)=>`<div class="row" style="grid-template-columns:1fr 1fr 1fr auto;gap:4px"><input data-ex="${i}" data-f="a" type="number" value="${e.a<=-500?"":e.a}" placeholder="inicio" title="desde"><input data-ex="${i}" data-f="b" type="number" value="${e.b>=5000?"":e.b}" placeholder="fin" title="hasta"><input data-ex="${i}" data-f="t" type="number" value="${e.t}" title="grosor"><button data-exdel="${i}">✕</button></div>`).join("")}
+    <div class="btns"><button id="p-addext">+ Añadir tramo</button></div>
     <p style="color:var(--mut);font-size:12px">El grosor crece hacia fuera. Mover la pared cambia el tamaño interior de la habitación; las puertas y ventanas de esa pared se mueven con ella. También: arrastrar, flechas (Shift = 10 cm).</p>`;
     $("#p-t").onchange=e=>{ setOuterT(o.ow,+e.target.value||o.t); commit(); render(); };
     $("#p-pos").onchange=e=>{ moveOuter(o.ow,+e.target.value); commit(); render(); };
+    const R=room();
+    P.querySelectorAll("[data-ex]").forEach(inp=>inp.onchange=()=>{ const i=+inp.dataset.ex, f=inp.dataset.f, v=inp.value===""?(f==="a"?-1e4:1e4):+inp.value; setExt(o.ow,i,{[f]:f==="t"?Math.max(2,v||o.t):v}); commit(); render(); });
+    P.querySelectorAll("[data-exdel]").forEach(b=>b.onclick=()=>{ const i=+b.dataset.exdel, e=R.ext[o.ow][i]; setExt(o.ow,i,{t:R.t[o.ow]}); R.ext[o.ow].splice(i,1); commit(); render(); });
+    $("#p-addext").onclick=()=>{ const hz=o.ow==="n"||o.ow==="s", st=hz?R.x0:R.y0; (R.ext[o.ow]=R.ext[o.ow]||[]).push({a:st,b:st+100,t:o.t}); commit(); render(); };
     return;
   }
   if(isWall(o)){
@@ -344,7 +367,7 @@ $("#png").onclick=()=>{
 };
 
 /* Plano DEFINITIVO (exportado por el usuario, cm). X = largo, Y = ancho. Escritorio en L: w×d = caja total, a = fondo del tablero principal, b = fondo del ala */
-const DEFINITIVO = {"room": {"w": 680, "h": 400, "x0": 0, "y0": 0, "t": {"n": 12, "s": 30, "w": 12, "e": 12}}, "walls": [{"id": 1, "x1": 380, "y1": 0, "x2": 380, "y2": 320, "t": 10}, {"id": 2, "x1": 155, "y1": 320, "x2": 425, "y2": 320, "t": 10}, {"id": 3, "x1": 165, "y1": 320, "x2": 165, "y2": 400, "t": 10}, {"id": 4, "x1": 430, "y1": 320, "x2": 430, "y2": 400, "t": 10}], "items": [{"id": 5, "name": "Ventana 110", "w": 110, "d": 12, "kind": "window", "x": 180, "y": -5, "rot": 0, "fx": false, "fy": false, "color": "#999"}, {"id": 8, "name": "Puerta 70", "w": 70, "d": 10, "kind": "door", "x": 235, "y": 415, "rot": 0, "fx": true, "fy": false, "color": "#999"}, {"id": 9, "name": "Puerta 70 (a gamer)", "w": 70, "d": 10, "kind": "door", "x": 430, "y": 360, "rot": 90, "fx": true, "fy": false, "color": "#999"}, {"id": 10, "name": "DORMIR (a retornar)", "w": 160, "d": 24, "kind": "text", "x": 150, "y": 250, "rot": 0, "fx": false, "fy": false, "color": "#999"}, {"id": 11, "name": "GAMER (secundaria)", "w": 200, "d": 30, "kind": "text", "x": 540, "y": 150, "rot": 0, "fx": false, "fy": false, "color": "#999"}, {"id": 106, "name": "Puerta 72", "w": 72, "d": 10, "kind": "door", "color": "#fff", "x": 165, "y": 360, "rot": 270, "fx": true, "fy": true}, {"id": 107, "name": "Puerta 92", "w": 92, "d": 10, "kind": "door", "color": "#fff", "x": -5, "y": 210, "rot": 90, "fx": false, "fy": false}, {"id": 120, "name": "Cama 140", "w": 140, "d": 200, "kind": null, "x": 305, "y": 215, "rot": 180, "fx": false, "fy": false, "color": "#7aa7e0", "h": 45, "z": 0}, {"id": 122, "name": "TV 55\" colgada", "w": 123, "d": 6, "kind": null, "x": 305, "y": 3, "rot": 180, "fx": false, "fy": true, "color": "#4b5563", "h": 71, "z": 75}, {"id": 123, "name": "Armario 140x180", "w": 140, "d": 60, "kind": null, "x": 30, "y": 70, "rot": 90, "fx": false, "fy": true, "color": "#e0b36a", "h": 180, "z": 0}, {"id": 125, "name": "Escritorio en L", "shape": "L", "w": 150, "d": 130, "a": 60, "b": 60, "kind": null, "x": 75, "y": 335, "rot": 0, "fx": false, "fy": true, "color": "#8fc79a", "h": 75, "z": 0}]};
+const DEFINITIVO = {"room": {"w": 680, "h": 400, "x0": 0, "y0": 0, "t": {"n": 12, "s": 12, "w": 12, "e": 12}, "ext": {"s": [{"a": -1000, "b": 270, "t": 30}]}}, "walls": [{"id": 1, "x1": 380, "y1": 0, "x2": 380, "y2": 320, "t": 10}, {"id": 2, "x1": 155, "y1": 320, "x2": 425, "y2": 320, "t": 10}, {"id": 3, "x1": 165, "y1": 320, "x2": 165, "y2": 400, "t": 10}, {"id": 4, "x1": 430, "y1": 320, "x2": 430, "y2": 400, "t": 10}], "items": [{"id": 5, "name": "Ventana 110", "w": 110, "d": 12, "kind": "window", "x": 180, "y": -5, "rot": 0, "fx": false, "fy": false, "color": "#999"}, {"id": 8, "name": "Puerta 70", "w": 70, "d": 10, "kind": "door", "x": 235, "y": 415, "rot": 0, "fx": true, "fy": false, "color": "#999"}, {"id": 9, "name": "Puerta 70 (a gamer)", "w": 70, "d": 10, "kind": "door", "x": 430, "y": 360, "rot": 90, "fx": true, "fy": false, "color": "#999"}, {"id": 10, "name": "DORMIR (a retornar)", "w": 160, "d": 24, "kind": "text", "x": 150, "y": 250, "rot": 0, "fx": false, "fy": false, "color": "#999"}, {"id": 11, "name": "GAMER (secundaria)", "w": 200, "d": 30, "kind": "text", "x": 540, "y": 150, "rot": 0, "fx": false, "fy": false, "color": "#999"}, {"id": 106, "name": "Puerta 72", "w": 72, "d": 10, "kind": "door", "color": "#fff", "x": 165, "y": 360, "rot": 270, "fx": true, "fy": true}, {"id": 107, "name": "Puerta 92", "w": 92, "d": 10, "kind": "door", "color": "#fff", "x": -5, "y": 210, "rot": 90, "fx": false, "fy": false}, {"id": 120, "name": "Cama 140", "w": 140, "d": 200, "kind": null, "x": 305, "y": 215, "rot": 180, "fx": false, "fy": false, "color": "#7aa7e0", "h": 45, "z": 0}, {"id": 122, "name": "TV 55\" colgada", "w": 123, "d": 6, "kind": null, "x": 305, "y": 3, "rot": 180, "fx": false, "fy": true, "color": "#4b5563", "h": 71, "z": 75}, {"id": 123, "name": "Armario 140x180", "w": 140, "d": 60, "kind": null, "x": 30, "y": 70, "rot": 90, "fx": false, "fy": true, "color": "#e0b36a", "h": 180, "z": 0}, {"id": 125, "name": "Escritorio en L", "shape": "L", "w": 150, "d": 130, "a": 60, "b": 60, "kind": null, "x": 75, "y": 335, "rot": 0, "fx": false, "fy": true, "color": "#8fc79a", "h": 75, "z": 0}]};
 function planoInicial(){ return JSON.parse(JSON.stringify(DEFINITIVO)); }
 /* ---------- Vista 3D (three.js, cm → unidades; plano X→x, plano Y→z, altura→y) ---------- */
 var V3={on:false,dirty:false,wallH:110,cmp:false,cam:"orbit"};
@@ -363,8 +386,8 @@ function buildScene(items){
   const floor=box3(W,2,H,0xc8b394,X0+W/2,-1,Y0+H/2); floor.castShadow=false; sc.add(floor);
   // paredes: exteriores (12 cm, hacia fuera) + tabiques
   const segs=[
-    {ax:"x",fix:Y0-T.n/2,t:T.n,a:X0-T.w,b:X0+W+T.e,c:0xdedad2},{ax:"x",fix:Y0+H+T.s/2,t:T.s,a:X0-T.w,b:X0+W+T.e,c:0xdedad2},
-    {ax:"z",fix:X0-T.w/2,t:T.w,a:Y0,b:Y0+H,c:0xdedad2},{ax:"z",fix:X0+W+T.e/2,t:T.e,a:Y0,b:Y0+H,c:0xdedad2}];
+    ...["n","s"].flatMap(k=>wallPieces(k).map(p=>({ax:"x",fix:p.fix,t:p.t,a:p.a,b:p.b,c:0xdedad2}))),
+    ...["w","e"].flatMap(k=>wallPieces(k).map(p=>({ax:"z",fix:p.fix,t:p.t,a:p.a,b:p.b,c:0xdedad2})))];
   for(const w of S.walls){ if(w.x1===w.x2) segs.push({ax:"z",fix:w.x1,t:w.t,a:Math.min(w.y1,w.y2),b:Math.max(w.y1,w.y2),c:0xf1eee7});
     else if(w.y1===w.y2) segs.push({ax:"x",fix:w.y1,t:w.t,a:Math.min(w.x1,w.x2),b:Math.max(w.x1,w.x2),c:0xf1eee7}); }
   const ops=segs.map(()=>[]);
