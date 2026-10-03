@@ -54,7 +54,7 @@ svg{width:100%;height:100%;display:block;touch-action:none;user-select:none;back
 "use strict";
 const $ = s => document.querySelector(s);
 const NS = "http://www.w3.org/2000/svg";
-const KEY = "diseno_habitacion_v2";
+const KEY = "diseno_habitacion_v3";
 
 // Catálogo (cm): w = ancho, d = fondo
 const CAT = {
@@ -261,16 +261,23 @@ $("#png").onclick=()=>{
 function planoInicial(){
   let n=1; const W=(x1,y1,x2,y2)=>({id:n++,x1,y1,x2,y2,t:10});
   const I=(name,w,d,kind,x,y,rot,fx,color)=>({id:n++,name,w,d,kind,x,y,rot,fx:!!fx,fy:false,color:color||"#999"});
+  const M="#7aa7e0", A="#e0b36a";
   return {room:{w:680,h:400},
-    walls:[W(380,0,380,300),W(200,300,460,300),W(200,300,200,400),W(460,300,460,400)],
+    walls:[W(380,0,380,320),W(200,320,460,320),W(200,320,200,400),W(460,320,460,400)],
     items:[
       I("Ventana 110",110,12,"window",185,-6,0),
       I("Puerta 60 (hoja 1)",60,10,"door",-6,190,90,false),
       I("Puerta 60 (hoja 2)",60,10,"door",-6,250,90,true),
       I("Puerta 70",70,10,"door",280,406,0),
-      I("Puerta 90",90,10,"door",460,350,90),
-      I("DORMIR (a retornar)",200,30,"text",190,150,0),
-      I("GAMER (secundaria)",200,30,"text",540,150,0)
+      I("Puerta 70 (a gamer)",70,10,"door",460,360,90),
+      I("DORMIR (a retornar)",160,24,"text",110,300,0),
+      I("GAMER (secundaria)",200,30,"text",540,150,0),
+      /* propuesta A: cabecero contra el tabique */
+      I("Cama 140",140,200,null,275,170,90,false,M),
+      I("Mesita noche",40,35,null,355,75,90,false,M),
+      I("Armario 140",140,60,null,30,70,90,false,A),
+      I("Armario nuevo (a diseñar)",200,60,null,100,370,0,false,A),
+      I("Escritorio 120",120,60,null,185,30,0,false,"#8fc79a")
     ]};
 }
 /* ---------- init ---------- */
