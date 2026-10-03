@@ -34,6 +34,39 @@ svg{width:100%;height:100%;display:block;touch-action:none;user-select:none;back
 .row select{width:100%;padding:4px 6px;border:1px solid var(--line);border-radius:5px;background:var(--bg)}
 .cf{display:block;width:100%;text-align:left;margin:4px 0;border-color:#dc262655}
 .cf small{display:block;color:var(--mut);font-size:11px}
+#rev{position:fixed;inset:0;background:#0008;z-index:50;display:flex;align-items:center;justify-content:center}
+#rev[hidden]{display:none}
+#revbox{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:10px;width:min(1280px,98vw);height:min(780px,94vh);display:grid;grid-template-columns:330px 1fr;overflow:hidden}
+#revside{padding:14px;overflow:auto;border-right:1px solid var(--line)}
+#revside h3{margin:14px 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut)}
+#revside h3:first-child{margin-top:0}
+#revmain{padding:14px;overflow:auto;padding-top:14px}
+#rev-kpi{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+.kpi{border:1px solid var(--line);border-radius:8px;padding:6px 8px}.kpi small{display:block;color:var(--mut);font-size:11px}.kpi b{font-size:15px}
+#rev-cats{width:100%;border-collapse:collapse;font-size:12px}
+#rev-cats th{text-align:left;color:var(--mut);font-size:11px;padding:3px 4px;border-bottom:1px solid var(--line)}
+#rev-cats td{padding:4px;border-bottom:1px solid var(--line)}#rev-cats td small{display:block;color:var(--mut)}#rev-cats tr.tt td{font-weight:700}
+.warn{color:#dc2626}.ok{color:#16a34a}
+.lk{display:block;width:100%;text-align:left;font-size:12px;margin:2px 0;padding:3px 6px}
+#rev-diff ul{margin:4px 0;padding-left:16px;font-size:12px}
+.revbar{display:flex;gap:6px;margin-bottom:8px;padding-right:44px}
+#rev-q{flex:1;padding:7px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg)}
+#rev-f{padding:6px;border:1px solid var(--line);border-radius:6px;background:var(--bg)}
+#rev-assign{display:flex;gap:6px;align-items:center;flex-wrap:wrap;background:var(--bg);border:1px solid var(--acc);border-radius:8px;padding:8px;margin-bottom:8px;font-size:13px}
+#rev-assign[hidden]{display:none}#rev-assign select{max-width:340px;padding:4px;border:1px solid var(--line);border-radius:5px;background:var(--panel)}
+#revtable{width:100%;border-collapse:collapse;font-size:13px}
+#revtable th{text-align:left;font-size:11px;text-transform:uppercase;color:var(--mut);padding:4px 6px;border-bottom:1px solid var(--line)}
+#revtable td{padding:5px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+#revtable td small{display:block;color:var(--mut);font-size:11px}
+#revtable td.n{text-align:right;white-space:nowrap}
+#revtable tr.bg td{background:var(--bg);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--mut)}
+#revtable tr.have td{opacity:.45}#revtable tr.bought td{background:#16a34a14}
+.lkc{min-width:300px}.lkrow{display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin-bottom:3px}
+.lki{flex:1;min-width:150px;padding:3px 6px;border:1px solid var(--line);border-radius:5px;background:var(--bg);font-size:12px}.lki.bad{border-color:#dc2626}
+.lkrow a{font-size:12px;text-decoration:none;color:var(--acc);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+.chip{background:var(--acc);color:#fff;border-radius:10px;padding:1px 8px;font-size:11px}
+#brev[data-n]:not([data-n=""])::after{content:attr(data-n);background:#dc2626;color:#fff;border-radius:9px;padding:0 6px;margin-left:6px;font-size:11px}
+@media (max-width:860px){#revbox{grid-template-columns:1fr;grid-template-rows:auto 1fr}}
 #bom{position:fixed;inset:0;background:#0008;z-index:50;display:flex;align-items:center;justify-content:center}
 #bom[hidden]{display:none}
 #bombox,#expbox{position:relative}
@@ -87,7 +120,7 @@ svg{width:100%;height:100%;display:block;touch-action:none;user-select:none;back
   <button id="fit">Ajustar vista</button><button id="b3d">Vista 3D</button>
   <span style="flex:1"></span>
   <button id="save">Guardar JSON</button><button id="load">Abrir JSON</button>
-  <button id="bbom" class="on">Lista de compra</button><button id="bexp" class="on">Exportar PDF / vistas…</button><button id="png">PNG 2D rápido</button><button id="reset">Plano inicial</button><button id="clear">Vaciar</button>
+  <button id="bbom" class="on">Lista de compra</button><button id="brev" class="on">Revisión de compra</button><button id="bexp" class="on">Exportar PDF / vistas…</button><button id="png">PNG 2D rápido</button><button id="reset">Plano inicial</button><button id="clear">Vaciar</button>
   <input id="file" type="file" accept=".json" hidden>
 </header>
 <aside id="lib"></aside>
@@ -118,6 +151,26 @@ svg{width:100%;height:100%;display:block;touch-action:none;user-select:none;back
       <table id="bomtable"><thead><tr><th>Concepto</th><th>Cant.</th><th>Ud.</th><th>€/ud</th><th>Total</th><th title="Ya lo tengo">Tengo</th></tr></thead><tbody id="bom-body"></tbody>
       <tfoot><tr><td colspan="4" style="text-align:right"><b>Total estimado</b></td><td class="n"><b id="bom-total"></b></td><td></td></tr></tfoot></table>
       <p style="color:var(--mut);font-size:12px">Cantidades orientativas calculadas del plano (merma incluida). Confírmalas con tu proveedor antes de comprar.</p>
+    </div>
+  </div>
+</div>
+<div id="rev" hidden>
+  <div id="revbox"><button class="xclose" data-close="#rev" title="Cerrar (Esc)">✕</button>
+    <div id="revside">
+      <h3>Revisión de compra</h3>
+      <div id="rev-kpi"></div>
+      <h3>Por categoría</h3><table id="rev-cats"></table>
+      <h3>Precios pendientes</h3><div id="rev-nop"></div>
+      <h3>Cambios desde la última revisión</h3><div id="rev-diff"></div>
+      <div class="btns"><button id="rev-mark" class="on">Marcar como revisada</button></div>
+    </div>
+    <div id="revmain">
+      <div class="revbar"><input id="rev-q" placeholder="Buscar en la lista o pegar un enlace de Leroy Merlin, Obramat, etc.…" autocomplete="off">
+        <select id="rev-f"><option value="all">Todas</option><option value="pend">Pendientes</option><option value="bou">Compradas</option><option value="nop">Sin precio</option><option value="nol">Sin enlace</option><option value="hav">Ya lo tengo</option></select>
+        <button id="rev-csv">CSV</button></div>
+      <div id="rev-assign" hidden></div>
+      <table id="revtable"><thead><tr><th title="Comprado">✓</th><th>Concepto</th><th>Cant.</th><th>€/ud</th><th>Total</th><th>Tienda / enlace</th></tr></thead><tbody id="rev-body"></tbody></table>
+      <p style="color:var(--mut);font-size:12px">El precio se escribe a mano: la web no puede leerlo de las tiendas. Las búsquedas abren Google limitado a cada tienda; pega luego aquí el enlace del producto que elijas.</p>
     </div>
   </div>
 </div>
@@ -171,7 +224,7 @@ let tool="select", snapOn=true, magOn=true, sel=null, hist=[], fut=[], uid=1, dr
 
 /* ---------- estado / historial ---------- */
 const snapshot = () => JSON.stringify(S);
-function commit(){ hist.push(snapshot()); if(hist.length>200)hist.shift(); fut=[]; persist(); }
+function commit(){ hist.push(snapshot()); if(hist.length>200)hist.shift(); fut=[]; persist(); if(typeof updateRevBadge==="function") updateRevBadge(); }
 function persist(){ try{localStorage.setItem(KEY,snapshot())}catch(e){} }
 function sanitize(o){
   if(!o||typeof o!=="object"||!o.room||!Array.isArray(o.items)||!Array.isArray(o.walls)) throw new Error("formato");
@@ -797,7 +850,7 @@ function planInner(k,dims){
   finally{ ({sel,CONF,drag,CUR}=keep); PRINT=null; }
 }
 const SVGCOL=[["var(--wall)","#5b616b"],["var(--panel)","#ffffff"],["var(--acc)","#2563eb"],["var(--bg)","#ffffff"],["currentColor","#111111"]];
-const esc=t=>String(t).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+const esc=t=>String(t).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 function planPage(o){        // devuelve {svg, wmm, hmm, scale, orient}
   const B=planBounds(), bw=B.x1-B.x0, bh=B.y1-B.y0, TB=36, MG=8, DM=o.dims?40:12;
   const fit=(ww,hh)=>{ const aw=ww-2*MG-2*DM, ah=hh-2*MG-TB-2*DM; for(const sc of SCALES) if(bw*10/sc<=aw&&bh*10/sc<=ah) return sc; return 200; };
@@ -925,13 +978,13 @@ $("#x-pdf").onclick=()=>runExport("pdf"); $("#x-zip").onclick=()=>runExport("zip
 
 /* ---------- Lista de compra / mediciones ---------- */
 const BOMKEY="diseno_habitacion_compra_v2";
-let BC={techo:250,capas:1,merma:10,caja:2.2,prices:{},have:{},tab:{},groups:{mob:true,pla:true,car:true,sue:true,pin:true}};
+let BC={techo:250,capas:1,merma:10,caja:2.2,prices:{},have:{},bought:{},links:{},snap:null,snapDate:"",tab:{},groups:{mob:true,pla:true,car:true,sue:true,pin:true}};
 try{ Object.assign(BC,JSON.parse(localStorage.getItem(BOMKEY)||"{}")); }catch{}
 try{ if(!localStorage.getItem(BOMKEY)){ const o=JSON.parse(localStorage.getItem("diseno_habitacion_compra_v1")||"{}"); BC.prices=o.prices||{}; BC.have=o.have||{}; } }catch{}   // migra precios, no la config de tabiques
-delete BC.groups.obra;
+delete BC.groups.obra; BC.bought=BC.bought||{}; BC.links=BC.links||{};
 document.querySelectorAll(".xclose").forEach(b=>b.onclick=()=>{ $(b.dataset.close).hidden=true; });
-document.querySelectorAll("#bom,#exp").forEach(o=>o.addEventListener("pointerdown",e=>{ if(e.target===o) o.hidden=true; }));
-addEventListener("keydown",e=>{ if(e.key==="Escape"){ const m=[$("#bom"),$("#exp")].find(x=>!x.hidden); if(m){ m.hidden=true; e.stopImmediatePropagation(); } } },true);
+document.querySelectorAll("#bom,#exp,#rev").forEach(o=>o.addEventListener("pointerdown",e=>{ if(e.target===o) o.hidden=true; }));
+addEventListener("keydown",e=>{ if(e.key==="Escape"){ const m=[$("#rev"),$("#bom"),$("#exp")].find(x=>!x.hidden); if(m){ m.hidden=true; e.stopImmediatePropagation(); } } },true);
 const saveBC=()=>{ try{localStorage.setItem(BOMKEY,JSON.stringify(BC))}catch{} };
 const fmt=(n,d=2)=>Number(n).toLocaleString("es-ES",{minimumFractionDigits:0,maximumFractionDigits:d});
 function openingsOnTabique(w){        // puertas/ventanas sobre un tabique ortogonal
@@ -1005,8 +1058,8 @@ function renderBOM(){
 }
 function bomRecalc(){ let g=0; for(const l of buildBOM().lines){ const t=lineTotal(l); g+=t; const c=document.querySelector(`[data-tot="${CSS.escape(l.key)}"]`); if(c) c.textContent=l.info?"":t?fmt(t)+" €":""; const r=document.querySelector(`[data-h="${CSS.escape(l.key)}"]`); if(r) r.closest("tr").classList.toggle("have",!!BC.have[l.key]); } $("#bom-total").textContent=fmt(g)+" €"; }
 function bomCSV(){
-  const B=buildBOM(), q=v=>`"${String(v).replace(/"/g,'""')}"`, rows=[["Categoría","Concepto","Cantidad","Unidad","Detalle","Precio unidad (€)","Total (€)","Ya lo tengo"].map(q).join(";")];
-  for(const l of B.lines) rows.push([q(BOMG[l.g]),q(l.name),fmt(l.qty),q(l.unit),q(l.detail||""),l.info?"":fmt(BC.prices[l.key]||0),l.info?"":fmt(lineTotal(l)),BC.have[l.key]?"sí":""].join(";"));
+  const B=buildBOM(), q=v=>`"${String(v).replace(/"/g,'""')}"`, rows=[["Categoría","Concepto","Cantidad","Unidad","Detalle","Precio unidad (€)","Total (€)","Ya lo tengo","Comprado","Enlace"].map(q).join(";")];
+  for(const l of B.lines) rows.push([q(BOMG[l.g]),q(l.name),fmt(l.qty),q(l.unit),q(l.detail||""),l.info?"":fmt(BC.prices[l.key]||0),l.info?"":fmt(lineTotal(l)),BC.have[l.key]?"sí":"",BC.bought[l.key]?"sí":"",q(BC.links[l.key]||"")].join(";"));
   rows.push("",[q("TOTAL"),"","","","","",fmt(B.lines.reduce((a,l)=>a+lineTotal(l),0)),""].join(";"));
   return new Blob(["﻿"+rows.join("\r\n")],{type:"text/csv;charset=utf-8"});
 }
@@ -1024,6 +1077,80 @@ $("#bom").addEventListener("change",e=>{ const t=e.target;
   const m={ "b-techo":"techo","b-capas":"capas","b-merma":"merma","b-caja":"caja" }[t.id]; if(m){ BC[m]=Math.max(0,+t.value||BC[m]); saveBC(); renderBOM(); } });
 $("#bom-csv").onclick=()=>download(bomCSV(),"lista-de-compra.csv");
 $("#bom-print").onclick=()=>{ document.body.classList.add("print-bom"); window.print(); setTimeout(()=>document.body.classList.remove("print-bom"),500); };
+
+/* ---------- Revisión de compra (sección aparte) ---------- */
+const STORES={"leroymerlin":["Leroy Merlin","leroymerlin.es"],"obramat":["Obramat","obramat.es"],"bricomart":["Bricomart","bricomart.es"],"bauhaus":["Bauhaus","bauhaus.es"],"bricodepot":["Brico Depot","bricodepot.es"],"ikea":["IKEA","ikea.com"],"amazon":["Amazon","amazon.es"],"manomano":["ManoMano","manomano.es"],"conforama":["Conforama","conforama.es"],"maisonsdumonde":["Maisons du Monde","maisonsdumonde.com"],"aliexpress":["AliExpress","aliexpress.com"],"pccomponentes":["PcComponentes","pccomponentes.com"],"mediamarkt":["MediaMarkt","mediamarkt.es"]};
+function cleanURL(t){ t=String(t||"").trim(); if(!t) return ""; if(!/^https?:\/\//i.test(t)){ if(!/^[\w-]+(\.[\w-]+)+(\/|$)/.test(t)) return null; t="https://"+t; } try{ const u=new URL(t); return /^https?:$/.test(u.protocol)?u.href:null; }catch{ return null; } }
+function storeOf(url){ try{ const h=new URL(url).hostname.replace(/^www\./,""); for(const k in STORES) if(h.includes(k)) return STORES[k][0]; return h; }catch{ return ""; } }
+const searchQ=name=>name.replace(/\([^)]*\)/g,"").replace(/\s+/g," ").trim();
+const gsearch=(name,site)=>`https://www.google.com/search?q=${encodeURIComponent((site?`site:${site} `:"")+searchQ(name))}`;
+let REVF={q:"",f:"all"}, PASTE="";
+function revLines(){ return buildBOM().lines.filter(l=>!l.info); }
+function revStats(ls){
+  const cats={}, tot={est:0,bou:0,nop:0,nol:0,hav:0};
+  for(const l of ls){ const c=cats[l.g]||(cats[l.g]={n:0,est:0,bou:0,nop:0}); c.n++;
+    if(BC.have[l.key]){ tot.hav++; continue; }
+    const t=lineTotal(l), pr=+BC.prices[l.key]||0; c.est+=t; tot.est+=t; if(BC.bought[l.key]){ c.bou+=t; tot.bou+=t; }
+    if(!pr){ c.nop++; tot.nop++; } if(!BC.links[l.key]) tot.nol++; }
+  return {cats,tot};
+}
+function revDiff(ls){
+  const cur=new Map(ls.map(l=>[l.key,l])), snap=BC.snap||{}, add=[],del=[],chg=[];
+  if(!BC.snapDate) return null;
+  for(const [k,l] of cur){ if(!(k in snap)) add.push(l.name); else if(Math.abs(snap[k].q-l.qty)>1e-9) chg.push(`${l.name}: ${fmt(snap[k].q)} → ${fmt(l.qty)} ${l.unit}`); }
+  for(const k in snap) if(!cur.has(k)) del.push(snap[k].n);
+  return {add,del,chg,n:add.length+del.length+chg.length};
+}
+function renderREV(){
+  const ls=revLines(), {cats,tot}=revStats(ls), d=revDiff(ls), eur=n=>fmt(n)+" €";
+  $("#rev-kpi").innerHTML=[["Total estimado",eur(tot.est)],["Comprado",eur(tot.bou)],["Pendiente",eur(tot.est-tot.bou)],["Sin precio",tot.nop],["Sin enlace",tot.nol],["Ya lo tengo",tot.hav]].map(([a,b])=>`<div class="kpi"><small>${a}</small><b>${b}</b></div>`).join("");
+  $("#rev-cats").innerHTML=`<tr><th>Categoría</th><th>Estimado</th><th>Comprado</th><th>Pendiente</th></tr>`+Object.keys(BOMG).filter(g=>cats[g]).map(g=>{ const c=cats[g]; return `<tr><td>${BOMG[g]}<small>${c.n} conceptos${c.nop?` · <span class="warn">${c.nop} sin precio</span>`:""}</small></td><td class="n">${eur(c.est)}</td><td class="n">${eur(c.bou)}</td><td class="n">${eur(c.est-c.bou)}</td></tr>`; }).join("")+`<tr class="tt"><td>Total</td><td class="n">${eur(tot.est)}</td><td class="n">${eur(tot.bou)}</td><td class="n">${eur(tot.est-tot.bou)}</td></tr>`;
+  const np=ls.filter(l=>!BC.have[l.key]&&!(+BC.prices[l.key]));
+  $("#rev-nop").innerHTML=np.length?`<p class="warn">${np.length} línea(s) sin precio:</p>`+np.slice(0,12).map(l=>`<button class="lk" data-goto="${esc(l.key)}">${esc(l.name)}</button>`).join("")+(np.length>12?`<small>… y ${np.length-12} más (filtro «Sin precio»)</small>`:""):`<p class="ok">✓ Todas las líneas tienen precio.</p>`;
+  $("#rev-diff").innerHTML=!BC.snapDate?`<p style="color:var(--mut)">Aún no has marcado ninguna revisión. Pulsa «Marcar como revisada» cuando des la lista por buena y te avisaré de lo que cambie en el plano.</p>`
+    :d.n?`<p class="warn">⚠ ${d.n} cambio(s) desde la revisión del ${BC.snapDate}:</p><ul>${d.add.map(x=>`<li>➕ ${esc(x)}</li>`).join("")}${d.del.map(x=>`<li>➖ ${esc(x)}</li>`).join("")}${d.chg.map(x=>`<li>✎ ${esc(x)}</li>`).join("")}</ul>`
+    :`<p class="ok">✓ Sin cambios desde la revisión del ${BC.snapDate}.</p>`;
+  // tabla
+  const q=REVF.q.trim().toLowerCase();
+  const vis=ls.filter(l=>{ if(q&&!(l.name+" "+(BOMG[l.g])+" "+storeOf(BC.links[l.key]||"")).toLowerCase().includes(q)) return false;
+    const h=!!BC.have[l.key], b=!!BC.bought[l.key], p=+BC.prices[l.key]||0, k=!!BC.links[l.key];
+    return {all:true,pend:!h&&!b,bou:b&&!h,nop:!h&&!p,nol:!h&&!k,hav:h}[REVF.f]; });
+  let html="";
+  for(const g of Object.keys(BOMG)){ const gl=vis.filter(l=>l.g===g); if(!gl.length) continue; html+=`<tr class="bg"><td colspan="6">${BOMG[g]}</td></tr>`;
+    for(const l of gl){ const k=esc(l.key), h=!!BC.have[l.key], url=BC.links[l.key]||"", st=url?storeOf(url):"", t=lineTotal(l);
+      html+=`<tr class="${h?"have":""}${BC.bought[l.key]?" bought":""}"><td><input type="checkbox" data-b="${k}" ${BC.bought[l.key]?"checked":""} ${h?"disabled":""} title="Comprado"></td>
+      <td>${esc(l.name)}<small>${h?"Ya lo tengo · ":""}${esc(l.detail||"")}</small></td><td class="n">${fmt(l.qty)} ${l.unit}</td>
+      <td><input class="pr" type="number" min="0" step="0.01" data-rp="${k}" value="${BC.prices[l.key]??""}" placeholder="€/ud" ${h?"disabled":""}></td><td class="n">${t?eur(t):""}</td>
+      <td class="lkc"><div class="lkrow"><input class="lki" data-rl="${k}" value="${esc(url)}" placeholder="Pega aquí el enlace de la tienda…">${url?`<a href="${esc(url)}" target="_blank" rel="noopener noreferrer" title="Abrir ${esc(st)}">↗</a>`:""}</div>
+      <div class="lkrow">${st?`<span class="chip">${esc(st)}</span>`:""}<a class="sb" target="_blank" rel="noopener noreferrer" href="${esc(gsearch(l.name,STORES.leroymerlin[1]))}">Leroy Merlin</a><a class="sb" target="_blank" rel="noopener noreferrer" href="${esc(gsearch(l.name,STORES.obramat[1]))}">Obramat</a><a class="sb" target="_blank" rel="noopener noreferrer" href="${esc(gsearch(l.name))}">Otras</a></div></td></tr>`; } }
+  $("#rev-body").innerHTML=html||"<tr><td colspan='6' style='color:var(--mut);padding:14px'>Ninguna línea coincide con el filtro.</td></tr>";
+  $("#rev-assign").innerHTML=PASTE?`<span>Enlace detectado (${esc(storeOf(PASTE))}). Asignar a:</span><select id="rev-sel">${ls.map(l=>`<option value="${esc(l.key)}">${esc(l.name)}</option>`).join("")}</select><button id="rev-go" class="on">Asignar</button><button id="rev-no">Descartar</button>`:"";
+  $("#rev-assign").hidden=!PASTE;
+}
+function updateRevBadge(){ clearTimeout(updateRevBadge.t); updateRevBadge.t=setTimeout(()=>{ try{ const d=BC.snapDate?revDiff(revLines()):null; const b=$("#brev"); b.dataset.n=d&&d.n?d.n:""; b.title=d&&d.n?`${d.n} cambio(s) en la lista desde la última revisión`:""; }catch{} },400); }
+function openREV(){ $("#rev").hidden=false; renderREV(); }
+$("#brev").onclick=openREV;
+$("#rev").addEventListener("change",e=>{ const t=e.target;
+  if(t.dataset.b!==undefined){ BC.bought[t.dataset.b]=t.checked; saveBC(); renderREV(); return; }
+  if(t.dataset.rp!==undefined){ BC.prices[t.dataset.rp]=t.value===""?undefined:+t.value; saveBC(); renderREV(); return; }
+  if(t.dataset.rl!==undefined){ const u=cleanURL(t.value); if(u===null){ t.classList.add("bad"); t.title="No parece un enlace válido"; return; } if(u) BC.links[t.dataset.rl]=u; else delete BC.links[t.dataset.rl]; saveBC(); renderREV(); return; }
+  if(t.id==="rev-f"){ REVF.f=t.value; renderREV(); } });
+$("#rev").addEventListener("input",e=>{ const t=e.target;
+  if(t.id==="rev-q"){ const u=cleanURL(t.value); if(u&&/^https?:\/\//i.test(t.value.trim())){ PASTE=u; REVF.q=""; } else { PASTE=""; REVF.q=t.value; } const pos=t.selectionStart; renderREV(); }
+  if(t.classList&&t.classList.contains("bad")) t.classList.remove("bad"); });
+$("#rev").addEventListener("click",e=>{ const t=e.target.closest("button"); if(!t) return;
+  if(t.dataset.goto){ REVF={q:"",f:"nop"}; $("#rev-q").value=""; $("#rev-f").value="nop"; renderREV(); return; }
+  if(t.id==="rev-go"){ BC.links[$("#rev-sel").value]=PASTE; PASTE=""; $("#rev-q").value=""; saveBC(); renderREV(); return; }
+  if(t.id==="rev-no"){ PASTE=""; $("#rev-q").value=""; renderREV(); return; }
+  if(t.id==="rev-mark"){ BC.snap=Object.fromEntries(revLines().map(l=>[l.key,{q:l.qty,n:l.name}])); BC.snapDate=new Date().toLocaleDateString("es-ES"); saveBC(); renderREV(); updateRevBadge(); return; }
+  if(t.id==="rev-csv"){ download(revCSV(),"revision-compra.csv"); } });
+function revCSV(){
+  const ls=revLines(), q=v=>`"${String(v).replace(/"/g,'""')}"`, rows=[["Categoría","Concepto","Cantidad","Unidad","Precio unidad (€)","Total (€)","Estado","Tienda","Enlace"].map(q).join(";")];
+  for(const l of ls){ const h=BC.have[l.key], url=BC.links[l.key]||"";
+    rows.push([q(BOMG[l.g]),q(l.name),fmt(l.qty),q(l.unit),fmt(BC.prices[l.key]||0),fmt(lineTotal(l)),q(h?"Ya lo tengo":BC.bought[l.key]?"Comprado":"Pendiente"),q(url?storeOf(url):""),q(url)].join(";")); }
+  const {tot}=revStats(ls); rows.push("",[q("TOTAL estimado"),"","","","",fmt(tot.est),"","",""].join(";"),[q("Comprado"),"","","","",fmt(tot.bou),"","",""].join(";"),[q("Pendiente"),"","","","",fmt(tot.est-tot.bou),"","",""].join(";"));
+  return new Blob(["﻿"+rows.join("\r\n")],{type:"text/csv;charset=utf-8"});
+}
 
 /* ---------- init ---------- */
 (function init(){
