@@ -112,11 +112,11 @@ svg{width:100%;height:100%;display:block;touch-action:none;user-select:none;back
 "use strict";
 const $ = s => document.querySelector(s);
 const NS = "http://www.w3.org/2000/svg";
-const KEY = "diseno_habitacion_v8";
+const KEY = "diseno_habitacion_v9";
 
 // Catálogo (cm): w = ancho, d = fondo
 const CAT = {
-  "Dormitorio":[["Cama 90",90,200],["Cama 135",135,200],["Cama 150",150,200],["Cama 160",160,200],["Mesita noche",40,35],["Cómoda",100,45],["Armario 2 puertas",100,55],["Armario 3 puertas",150,55],["Armario 4 puertas",200,60],["Cuna",70,130]],
+  "Dormitorio":[["Cama tapizada 140 (rincón)",140,200,"B"],["Cama 90",90,200],["Cama 135",135,200],["Cama 150",150,200],["Cama 160",160,200],["Mesita noche",40,35],["Cómoda",100,45],["Armario 2 puertas",100,55],["Armario 3 puertas",150,55],["Armario 4 puertas",200,60],["Cuna",70,130]],
   "Estudio":[["Monitor PC",62,6],["Escritorio 140",140,60],["Escritorio en L",150,130,"L"],["Escritorio 120",120,60],["Silla",45,45],["Estantería",80,30],["Librería 2m",200,30],["Mesa de trabajo",160,80]],
   "Salón":[["Sofá 2 plazas",160,90],["Sofá 3 plazas",210,90],["Mueble TV",150,40],["Mesa centro",100,50],["Butaca",80,80],["Mesa comedor",160,90]],
   "Aperturas":[["Puerta 72",72,10,"door"],["Puerta 82",82,10,"door"],["Puerta 92",92,10,"door"],["Ventana 100",100,12,"window"],["Ventana 150",150,12,"window"]],
@@ -295,7 +295,17 @@ function sym(g,it,stroke,sw){
   const R=(x,y,ww,hh,a)=>el("rect",{x,y,width:Math.max(0,ww),height:Math.max(0,hh),...a},g);
   const body={fill:c,"fill-opacity":.8,stroke,"stroke-width":sw,"stroke-linejoin":"round"};
   const line=(x1,y1,x2,y2,col="#00000055",wd=1)=>el("line",{x1,y1,x2,y2,stroke:col,"stroke-width":wd,"stroke-linecap":"round"},g);
-  if(/^Cama|^Cuna/.test(n)){
+  if(it.style==="rincon"){
+    const pb=it.pb||10, ph=it.ph||12, bk=it.back||-1, F=it.fabric||"#4b4f55", mx=bk<0?x0+pb:x0, mw=w-pb, my=y0+ph, ml=d-ph;
+    R(x0,y0,w,d,{fill:F,stroke,"stroke-width":sw,rx:3,"stroke-linejoin":"round"});
+    R(mx+1,my+1,mw-2,ml-2,{fill:"#f4f2ed",stroke:"#00000030"});
+    const dl=Math.max(20,ml-55); R(mx+2,my+ml-dl-2,mw-4,dl,{fill:c,stroke:"#00000040",rx:2});
+    for(let yy=my+ml-dl+8;yy<my+ml-6;yy+=14) line(mx+4,yy,mx+mw-4,yy,"#00000022");
+    for(const sx of [-1,1]) R(mx+mw/2+sx*(mw/4)-(mw/2-10)/2,my+6,mw/2-10,22,{fill:"#fff",stroke:"#00000035",rx:6});
+    R(bk<0?x0:x0+w-pb,my,pb,ml,{fill:"#00000045"}); line(bk<0?x0+1:x0+w-pb+1,my+ml/2,bk<0?x0+pb-1:x0+w-1,my+ml/2,"#ffffff40");
+    R(x0,y0,w,ph,{fill:"#00000060"});
+    for(let i=0;i<3;i++) R(x0+6+i*(w-12)/3,y0+2,(w-12)/3-4,Math.max(3,ph-5),{fill:"#ffd27a",rx:1.5});         // hornacinas con luz
+  } else if(/^Cama|^Cuna/.test(n)){
     R(x0,y0,w,d,{...body,rx:3});
     R(x0,y0,w,Math.min(9,d*.05),{fill:"#00000040"});                                   // cabecero
     const pw=w/2-8; for(const sx of [-1,1]) R(sx*(w/4)-pw/2,y0+Math.min(13,d*.07),pw,Math.min(30,d*.16),{fill:"#fff","fill-opacity":.85,stroke:"#00000030",rx:6});
@@ -339,7 +349,7 @@ function drawItem(it){
   } else if(it.kind==="text"){
     el("rect",{x:-it.w/2,y:-it.d/2,width:it.w,height:it.d,fill:"transparent",stroke:s?"var(--acc)":"none","stroke-dasharray":"3 3"},g);
   } else if(it.kind==="window"){
-    const wt=hostThickness(it); el("rect",{x:-it.w/2,y:-wt/2,width:it.w,height:wt,fill:"#bfe3f5",stroke:stroke,"stroke-width":s?2:1},g);
+    const wt=hostThickness(it), fc=it.color&&it.color.length===7?it.color:"#383e42"; el("rect",{x:-it.w/2,y:-wt/2,width:it.w,height:wt,fill:"#bfe3f5",stroke:s?"var(--acc)":fc,"stroke-width":s?2:1.8},g);
     el("line",{x1:-it.w/2,y1:0,x2:it.w/2,y2:0,stroke:"#4a90b8"},g);
   } else {
     sym(g,it,stroke,s?2.5:bad?2:1);
@@ -374,21 +384,21 @@ function magnet(o,x,y){
 function buildLib(){
   const L=$("#lib"); L.innerHTML="<h3>Habitación (interior)</h3>";
   const r=document.createElement("div");
-  r.innerHTML=`<div class="row"><label>Ancho cm</label><input id="rw" type="number" value="${S.room.w}"></div><div class="row"><label>Fondo cm</label><input id="rh" type="number" value="${S.room.h}"></div>`;
+  r.innerHTML=`<div class="row"><label>Ancho cm</label><input id="rw" type="number" value="${S.room.w}"></div><div class="row"><label>Fondo cm</label><input id="rh" type="number" value="${S.room.h}"></div><div class="row"><label>Suelo</label><input id="rf" type="color" value="${S.room.floor||"#8a8885"}"></div>`;
   L.appendChild(r);
-  r.querySelectorAll("input").forEach(i=>i.onchange=()=>{ S.room.w=+$("#rw").value||S.room.w; S.room.h=+$("#rh").value||S.room.h; commit(); fit(); });
+  r.querySelectorAll("input").forEach(i=>i.onchange=()=>{ S.room.floor=$("#rf").value; V3.dirty=true; S.room.w=+$("#rw").value||S.room.w; S.room.h=+$("#rh").value||S.room.h; commit(); fit(); });
   for(const [cat,list] of Object.entries(CAT)){
     L.insertAdjacentHTML("beforeend",`<h3>${cat}</h3>`);
     const g=document.createElement("div"); g.className="grid"; L.appendChild(g);
     for(const [name,w,d,kind] of list){
       const b=document.createElement("button"); b.innerHTML=`${name}<small>${w}×${d}</small>`;
-      b.onclick=()=>addItem(kind==="L"?{name,w,d,shape:"L",a:60,b:60,color:COLORS[cat],h:75}:{name,w,d,kind,color:COLORS[cat]});
+      b.onclick=()=>addItem(kind==="B"?{name,w,d,color:"#c9d1a0",h:50,extra:{style:"rincon",pb:10,ph:12,back:-1,fabric:"#4b4f55"}}:kind==="L"?{name,w,d,shape:"L",a:60,b:60,color:COLORS[cat],h:75}:{name,w,d,kind,color:COLORS[cat]});
       g.appendChild(b);
     }
   }
 }
 function addItem(o){
-  const it={id:uid++,name:o.name,w:o.w,d:o.d,kind:o.kind||null,shape:o.shape,a:o.a,b:o.b,h:o.h,color:o.color||"#999",x:sn(room().x0+S.room.w/2),y:sn(room().y0+S.room.h/2),rot:0,fx:false,fy:false};
+  const it={...(o.extra||{}),id:uid++,name:o.name,w:o.w,d:o.d,kind:o.kind&&o.kind!=="B"?o.kind:null,shape:o.shape,a:o.a,b:o.b,h:o.h,color:o.color||"#999",x:sn(room().x0+S.room.w/2),y:sn(room().y0+S.room.h/2),rot:0,fx:false,fy:false};
   S.items.push(it); sel=it.id; commit(); render();
 }
 function props(){
@@ -439,11 +449,12 @@ function props(){
     <div class="row"><label>Y (centro)</label><input id="p-y" type="number" value="${Math.round(o.y)}"></div>
     <div class="row"><label>Giro °</label><input id="p-r" type="number" value="${o.rot}"></div>
     ${o.kind?"":`<div class="row"><label>Alto cm</label><input id="p-h" type="number" value="${o.h||0}"></div><div class="row"><label>Elevación cm</label><input id="p-z" type="number" value="${o.z||0}"></div>`}
-    ${o.kind?"":`<div class="row"><label>Color</label><input id="p-c" type="color" value="${o.color}"></div>`}
+    ${o.style==="rincon"?`<div class="row"><label>Panel lateral</label><input id="p-pb" type="number" value="${o.pb}"></div><div class="row"><label>Panel cabecero</label><input id="p-ph" type="number" value="${o.ph}"></div><div class="row"><label>Tapizado</label><input id="p-fab" type="color" value="${o.fabric}"></div>`:""}
+    ${o.kind&&o.kind!=="window"?"":`<div class="row"><label>${o.style==="rincon"?"Color nórdico":o.kind==="window"?"Marco":"Color"}</label><input id="p-c" type="color" value="${o.color&&o.color.length===7?o.color:"#383e42"}"></div>`}
     <div class="btns"><button id="p-rot">Girar 90° (R)</button><button id="p-m15">−15°</button><button id="p-p15">+15°</button><button id="p-fx">Espejo H</button><button id="p-fy">Espejo V</button><button id="p-dup">Duplicar</button><button id="p-del">Eliminar</button></div>`;
     const bind=(id,f)=>{ const e=$(id); if(e) e.onchange=ev=>{ f(ev.target.value); commit(); render(); }; };
     bind("#p-name",v=>o.name=v); bind("#p-w",v=>o.w=Math.max(5,+v||o.w)); bind("#p-d",v=>o.d=Math.max(5,+v||o.d));
-    bind("#p-x",v=>o.x=+v); bind("#p-y",v=>o.y=+v); bind("#p-r",v=>o.rot=((+v%360)+360)%360); bind("#p-c",v=>o.color=v); bind("#p-a",v=>o.a=Math.max(10,+v||o.a)); bind("#p-b",v=>o.b=Math.max(10,+v||o.b)); bind("#p-h",v=>o.h=+v); bind("#p-z",v=>o.z=+v);
+    bind("#p-x",v=>o.x=+v); bind("#p-y",v=>o.y=+v); bind("#p-r",v=>o.rot=((+v%360)+360)%360); bind("#p-c",v=>o.color=v); bind("#p-pb",v=>o.pb=Math.max(0,+v||0)); bind("#p-ph",v=>o.ph=Math.max(0,+v||0)); bind("#p-fab",v=>o.fabric=v); bind("#p-a",v=>o.a=Math.max(10,+v||o.a)); bind("#p-b",v=>o.b=Math.max(10,+v||o.b)); bind("#p-h",v=>o.h=+v); bind("#p-z",v=>o.z=+v);
     $("#p-rot").onclick=()=>rot(o); $("#p-m15").onclick=()=>{o.rot=(o.rot+345)%360;commit();render()}; $("#p-p15").onclick=()=>{o.rot=(o.rot+15)%360;commit();render()}; $("#p-fx").onclick=()=>{o.fx=!o.fx;commit();render()}; $("#p-fy").onclick=()=>{o.fy=!o.fy;commit();render()};
     $("#p-dup").onclick=()=>dup(o);
   }
@@ -520,7 +531,7 @@ $("#png").onclick=()=>{
 };
 
 /* Plano DEFINITIVO (plano/habitacion.json, exportado por el usuario, cm). X = largo, Y = ancho. Escritorio en L: w×d = caja total, a = fondo del tablero principal, b = fondo del ala */
-const DEFINITIVO = {"room": {"w": 680, "h": 445, "x0": 0, "y0": 0, "t": {"n": 12, "s": 45, "w": 12, "e": 12}, "dir": {"n": "out", "s": "in", "w": "out", "e": "out"}, "ext": {"s": [{"a": -1000, "b": 270, "t": 30, "dir": "out"}]}}, "walls": [{"id": 1, "x1": 380, "y1": 0, "x2": 380, "y2": 320, "t": 10}, {"id": 2, "x1": 195, "y1": 325, "x2": 430, "y2": 325, "t": 10}, {"id": 3, "x1": 195, "y1": 320, "x2": 195, "y2": 445, "t": 10}, {"id": 4, "x1": 430, "y1": 320, "x2": 430, "y2": 400, "t": 10}], "items": [{"id": 5, "name": "Ventana 110", "w": 110, "d": 12, "kind": "window", "x": 180, "y": -5, "rot": 0, "fx": false, "fy": false, "color": "#999"}, {"id": 8, "name": "Puerta 70", "w": 70, "d": 10, "kind": "door", "x": 235, "y": 475, "rot": 0, "fx": true, "fy": false, "color": "#999"}, {"id": 9, "name": "Puerta 70 (a gamer)", "w": 70, "d": 10, "kind": "door", "x": 430, "y": 360, "rot": 90, "fx": true, "fy": false, "color": "#999"}, {"id": 10, "name": "DORMIR (a retornar)", "w": 160, "d": 24, "kind": "text", "x": 150, "y": 250, "rot": 0, "fx": false, "fy": false, "color": "#999"}, {"id": 11, "name": "GAMER (secundaria)", "w": 200, "d": 30, "kind": "text", "x": 540, "y": 150, "rot": 0, "fx": false, "fy": false, "color": "#999"}, {"id": 106, "name": "Puerta 72", "w": 72, "d": 10, "kind": "door", "color": "#fff", "x": 190, "y": 365, "rot": 270, "fx": true, "fy": true}, {"id": 107, "name": "Puerta 92", "w": 92, "d": 10, "kind": "door", "color": "#fff", "x": -5, "y": 210, "rot": 90, "fx": false, "fy": false}, {"id": 120, "name": "Cama 140", "w": 140, "d": 200, "kind": null, "x": 305, "y": 220, "rot": 180, "fx": false, "fy": false, "color": "#7aa7e0", "h": 45, "z": 0}, {"id": 122, "name": "TV 55\" colgada", "w": 123, "d": 6, "kind": null, "x": 305, "y": 3, "rot": 180, "fx": false, "fy": true, "color": "#4b5563", "h": 71, "z": 120}, {"id": 123, "name": "Armario 140x180", "w": 140, "d": 60, "kind": null, "x": 30, "y": 70, "rot": 90, "fx": false, "fy": true, "color": "#e0b36a", "h": 180, "z": 0}, {"id": 125, "name": "Escritorio en L", "shape": "L", "w": 148, "d": 175, "a": 44, "b": 75, "kind": null, "x": 74, "y": 357.5, "rot": 0, "fx": false, "fy": true, "color": "#8fc79a", "h": 75, "z": 0}, {"id": 127, "name": "Silla", "w": 45, "d": 45, "kind": null, "color": "#e0b36a", "x": 575, "y": 80, "rot": 0, "fx": false, "fy": false}, {"id": 129, "name": "Armario 4 puertas", "w": 319, "d": 50, "kind": null, "color": "#7aa7e0", "x": 411, "y": 159.5, "rot": 270, "fx": false, "fy": false}, {"id": 130, "name": "Escritorio en L", "shape": "L", "w": 148, "d": 175, "a": 44, "b": 75, "kind": null, "x": 606, "y": 87.5, "rot": 180, "fx": false, "fy": true, "color": "#8fc79a", "h": 75, "z": 0}, {"id": 131, "name": "Escritorio en L", "shape": "L", "w": 175, "d": 150, "a": 75, "b": 45, "kind": null, "x": 605, "y": 312.5, "rot": 270, "fx": false, "fy": true, "color": "#8fc79a", "h": 75, "z": 0}, {"id": 132, "name": "Armario 2 puertas", "w": 50, "d": 75, "kind": null, "color": "#7aa7e0", "x": 642.5, "y": 200, "rot": 90, "fx": false, "fy": false}, {"id": 133, "name": "Silla", "w": 45, "d": 45, "kind": null, "color": "#e0b36a", "x": 575, "y": 310, "rot": 0, "fx": false, "fy": false}, {"id": 136, "name": "Monitor PC", "w": 80, "d": 6, "kind": null, "x": 650, "y": 125, "rot": 300, "fx": false, "fy": true, "color": "#4b5563", "h": 71, "z": 85}, {"id": 137, "name": "Monitor PC", "w": 80, "d": 6, "kind": null, "x": 660, "y": 270, "rot": 255, "fx": false, "fy": true, "color": "#4b5563", "h": 71, "z": 85}, {"id": 138, "name": "Monitor PC", "w": 80, "d": 6, "kind": null, "x": 655, "y": 360, "rot": 300, "fx": false, "fy": true, "color": "#4b5563", "h": 71, "z": 85}, {"id": 139, "name": "Monitor PC", "w": 80, "d": 6, "kind": null, "x": 660, "y": 45, "rot": 255, "fx": false, "fy": true, "color": "#4b5563", "h": 71, "z": 85}]};
+const DEFINITIVO = {"room": {"w": 680, "h": 445, "x0": 0, "y0": 0, "t": {"n": 12, "s": 45, "w": 12, "e": 12}, "dir": {"n": "out", "s": "in", "w": "out", "e": "out"}, "ext": {"s": [{"a": -1000, "b": 270, "t": 30, "dir": "out"}]}, "floor": "#8a8885"}, "walls": [{"id": 1, "x1": 380, "y1": 0, "x2": 380, "y2": 320, "t": 10}, {"id": 2, "x1": 195, "y1": 325, "x2": 430, "y2": 325, "t": 10}, {"id": 3, "x1": 195, "y1": 320, "x2": 195, "y2": 445, "t": 10}, {"id": 4, "x1": 430, "y1": 320, "x2": 430, "y2": 400, "t": 10}], "items": [{"id": 5, "name": "Ventana 110", "w": 110, "d": 12, "kind": "window", "x": 180, "y": -5, "rot": 0, "fx": false, "fy": false, "color": "#383e42"}, {"id": 8, "name": "Puerta 70", "w": 70, "d": 10, "kind": "door", "x": 235, "y": 475, "rot": 0, "fx": true, "fy": false, "color": "#999"}, {"id": 9, "name": "Puerta 70 (a gamer)", "w": 70, "d": 10, "kind": "door", "x": 430, "y": 360, "rot": 90, "fx": true, "fy": false, "color": "#999"}, {"id": 10, "name": "DORMIR (a retornar)", "w": 160, "d": 24, "kind": "text", "x": 150, "y": 250, "rot": 0, "fx": false, "fy": false, "color": "#999"}, {"id": 11, "name": "GAMER (secundaria)", "w": 200, "d": 30, "kind": "text", "x": 540, "y": 150, "rot": 0, "fx": false, "fy": false, "color": "#999"}, {"id": 106, "name": "Puerta 72", "w": 72, "d": 10, "kind": "door", "color": "#fff", "x": 190, "y": 365, "rot": 270, "fx": true, "fy": true}, {"id": 107, "name": "Puerta 92", "w": 92, "d": 10, "kind": "door", "color": "#fff", "x": -5, "y": 210, "rot": 90, "fx": false, "fy": false}, {"id": 120, "name": "Cama tapizada 140 (rincón)", "w": 140, "d": 200, "kind": null, "x": 305, "y": 220, "rot": 180, "fx": false, "fy": false, "color": "#c9d1a0", "h": 50, "z": 0, "style": "rincon", "pb": 10, "ph": 12, "back": -1, "fabric": "#4b4f55"}, {"id": 122, "name": "TV 55\" colgada", "w": 123, "d": 6, "kind": null, "x": 305, "y": 3, "rot": 180, "fx": false, "fy": true, "color": "#4b5563", "h": 71, "z": 120}, {"id": 123, "name": "Armario 140x180", "w": 140, "d": 60, "kind": null, "x": 30, "y": 70, "rot": 90, "fx": false, "fy": true, "color": "#e0b36a", "h": 180, "z": 0}, {"id": 125, "name": "Escritorio en L", "shape": "L", "w": 148, "d": 175, "a": 44, "b": 75, "kind": null, "x": 74, "y": 357.5, "rot": 0, "fx": false, "fy": true, "color": "#8fc79a", "h": 75, "z": 0}, {"id": 127, "name": "Silla", "w": 45, "d": 45, "kind": null, "color": "#e0b36a", "x": 575, "y": 80, "rot": 0, "fx": false, "fy": false}, {"id": 129, "name": "Armario 4 puertas", "w": 319, "d": 50, "kind": null, "color": "#7aa7e0", "x": 411, "y": 159.5, "rot": 270, "fx": false, "fy": false}, {"id": 130, "name": "Escritorio en L", "shape": "L", "w": 148, "d": 175, "a": 44, "b": 75, "kind": null, "x": 606, "y": 87.5, "rot": 180, "fx": false, "fy": true, "color": "#8fc79a", "h": 75, "z": 0}, {"id": 131, "name": "Escritorio en L", "shape": "L", "w": 175, "d": 150, "a": 75, "b": 45, "kind": null, "x": 605, "y": 312.5, "rot": 270, "fx": false, "fy": true, "color": "#8fc79a", "h": 75, "z": 0}, {"id": 132, "name": "Armario 2 puertas", "w": 50, "d": 75, "kind": null, "color": "#7aa7e0", "x": 642.5, "y": 200, "rot": 90, "fx": false, "fy": false}, {"id": 133, "name": "Silla", "w": 45, "d": 45, "kind": null, "color": "#e0b36a", "x": 575, "y": 310, "rot": 0, "fx": false, "fy": false}, {"id": 136, "name": "Monitor PC", "w": 80, "d": 6, "kind": null, "x": 650, "y": 125, "rot": 300, "fx": false, "fy": true, "color": "#4b5563", "h": 71, "z": 85}, {"id": 137, "name": "Monitor PC", "w": 80, "d": 6, "kind": null, "x": 660, "y": 270, "rot": 255, "fx": false, "fy": true, "color": "#4b5563", "h": 71, "z": 85}, {"id": 138, "name": "Monitor PC", "w": 80, "d": 6, "kind": null, "x": 655, "y": 360, "rot": 300, "fx": false, "fy": true, "color": "#4b5563", "h": 71, "z": 85}, {"id": 139, "name": "Monitor PC", "w": 80, "d": 6, "kind": null, "x": 660, "y": 45, "rot": 255, "fx": false, "fy": true, "color": "#4b5563", "h": 71, "z": 85}]};
 function planoInicial(){ return JSON.parse(JSON.stringify(DEFINITIVO)); }
 /* ---------- Vista 3D (three.js, cm → unidades; plano X→x, plano Y→z, altura→y) ---------- */
 var V3={on:false,dirty:false,redraw:true,wallH:110,cam:"orbit"};
@@ -534,13 +545,18 @@ function box3(w,h,d,color,x,y,z,opts){
   const m=new THREE.Mesh(geo3(w,h,d),mat3(color,opts));
   m.position.set(x,y,z); m.castShadow=true; m.receiveShadow=true; return m;
 }
-let WOOD=null;
-function woodTexture(){          // tablones procedurales (sin ficheros externos)
-  if(WOOD) return WOOD; const c=document.createElement("canvas"); c.width=c.height=512; const x=c.getContext("2d");
-  const rnd=(i)=>{ const v=Math.sin(i*127.1)*43758.5453; return v-Math.floor(v); };
-  for(let r=0;r<8;r++){ const y=r*64; for(let q=0;q<3;q++){ const off=(r%2)*100+q*170, w=170; const l=62+rnd(r*7+q)*10; x.fillStyle=`hsl(32 ${34+rnd(r+q)*8}% ${l}%)`; x.fillRect(off%512,y,w,64); x.fillRect((off%512)-512,y,w,64); } }
-  x.strokeStyle="rgba(60,40,20,.35)"; x.lineWidth=1.2; for(let r=0;r<=8;r++){ x.beginPath(); x.moveTo(0,r*64); x.lineTo(512,r*64); x.stroke(); }
-  WOOD=new THREE.CanvasTexture(c); WOOD.wrapS=WOOD.wrapT=THREE.RepeatWrapping; return WOOD;
+const WOOD=new Map();
+function woodTexture(base){          // parquet procedural: tablones con variación de tono y veta, a partir de un color base
+  base=base||"#8a8885"; if(WOOD.has(base)) return WOOD.get(base);
+  const c=document.createElement("canvas"); c.width=c.height=512; const x=c.getContext("2d"), hsl={}; new THREE.Color(base).getHSL(hsl);
+  let seed=7; const rnd=()=>{ seed=(seed*16807)%2147483647; return seed/2147483647; };
+  const plankW=170, rows=8, rh=512/rows;
+  for(let r=0;r<rows;r++){ let px=-rnd()*plankW; while(px<512){ const l=Math.min(.8,Math.max(.15,hsl.l+(rnd()-.5)*.09)), w=plankW*(.8+rnd()*.5);
+      x.fillStyle=`hsl(${hsl.h*360} ${hsl.s*100}% ${l*100}%)`; x.fillRect(px,r*rh,w,rh);
+      x.strokeStyle="rgba(0,0,0,.07)"; x.lineWidth=.8; for(let g=0;g<7;g++){ const gy=r*rh+rnd()*rh; x.beginPath(); x.moveTo(px,gy); x.bezierCurveTo(px+w*.3,gy+(rnd()-.5)*4,px+w*.7,gy+(rnd()-.5)*4,px+w,gy+(rnd()-.5)*2); x.stroke(); }
+      x.strokeStyle="rgba(0,0,0,.35)"; x.lineWidth=1.3; x.beginPath(); x.moveTo(px,r*rh); x.lineTo(px,(r+1)*rh); x.stroke(); px+=w; }
+    x.strokeStyle="rgba(0,0,0,.35)"; x.beginPath(); x.moveTo(0,r*rh); x.lineTo(512,r*rh); x.stroke(); }
+  const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.anisotropy=4; WOOD.set(base,t); return t;
 }
 function buildScene(items){
   const sc=new THREE.Scene(), R=room(), W=R.w, H=R.h, X0=R.x0, Y0=R.y0, T=R.t, WH=V3.wallH;
@@ -548,7 +564,7 @@ function buildScene(items){
   sc.add(new THREE.HemisphereLight(0xffffff,0x8a8a8a,.75));
   const sun=new THREE.DirectionalLight(0xffffff,.65); sun.position.set(X0+W*.2,700,Y0+H*1.4); sun.target.position.set(X0+W/2,0,Y0+H/2);
   sun.castShadow=true; sun.shadow.mapSize.set(2048,2048); const c=sun.shadow.camera; c.left=-500;c.right=500;c.top=500;c.bottom=-500;c.near=100;c.far=1800; sc.add(sun,sun.target);
-  const tex=woodTexture().clone(); tex.needsUpdate=true; tex.repeat.set(W/200,H/200);
+  const tex=woodTexture(R.floor).clone(); tex.needsUpdate=true; tex.repeat.set(W/200,H/200);
   const floor=new THREE.Mesh(geo3(W,2,H),new THREE.MeshStandardMaterial({map:tex,roughness:.7})); floor.position.set(X0+W/2,-1,Y0+H/2); floor.receiveShadow=true; sc.add(floor);
   // paredes: exteriores (12 cm, hacia fuera) + tabiques
   const segs=[
@@ -571,7 +587,7 @@ function buildScene(items){
       g.add(box3(4,lh,w-2,0xb98b5e,-w/2,lh/2,-w/2));                                   // hoja abierta 90°
       g.add(box3(2.5,lh,ht+1,fr,-w/2-1.2,lh/2,0)); g.add(box3(2.5,lh,ht+1,fr,w/2+1.2,lh/2,0)); if(WH>=206) g.add(box3(w+5,3,ht+1,fr,0,204.5,0));
       g.add(box3(3,10,2,0x444444,-w/2+3,100,-w+8,{metalness:.6})); }
-    else if(it.kind==="window"){ const ht=hostThickness(it), fr=0xffffff;
+    else if(it.kind==="window"){ const ht=hostThickness(it), fr=new THREE.Color(it.color&&it.color.length===7?it.color:"#383e42");
       g.add(box3(w-6,39,1.5,0x9fd3ee,0,152.5,0,{transparent:true,opacity:.35,roughness:.1}));
       g.add(box3(w,3,ht,fr,0,174,0)); g.add(box3(w,3,ht+4,fr,0,130.5,0)); g.add(box3(3,45,ht,fr,-w/2+1.5,152,0)); g.add(box3(3,45,ht,fr,w/2-1.5,152,0)); g.add(box3(2,40,ht,fr,0,152.5,0)); }
     else if(it.kind==="text"){ continue; }
@@ -582,7 +598,21 @@ function buildScene(items){
 function furniture(g,it){
   const w=it.w,d=it.d,h=it.h||defH(it.name),z0=it.z||0,col=new THREE.Color(it.color), n=it.name, dark=0x2b2b2b, wood=0x8b6b4a;
   const leg=(x,z,hh=h-3,s=4,c=0x555555)=>g.add(box3(s,hh,s,c,x,hh/2,z));
-  if(/^Cama|^Cuna/.test(n)){
+  if(it.style==="rincon"){
+    const pb=it.pb||10, ph=it.ph||12, bk=it.back||-1, F=it.fabric||"#4b4f55", Fd=new THREE.Color(F).multiplyScalar(.8), FH=32, MH=20, top=FH+MH;
+    const mw=w-pb, ml=d-ph, mcx=-bk*pb/2, mcz=ph/2;
+    g.add(box3(w,FH,d,F,0,FH/2,0));                                                                  // base tapizada con cajones
+    const fx=-bk*(w/2+.4); g.add(box3(.8,FH-8,.8,0x1f2124,fx,FH/2,mcz)); for(const zz of [mcz-d*.22,mcz+d*.22]) g.add(box3(.8,3,22,0x15171a,fx,6,zz));
+    g.add(box3(mw,MH,ml,0xf4f2ed,mcx,FH+MH/2,mcz));                                                  // colchón
+    const dl=Math.max(20,ml-55); g.add(box3(mw-2,4,dl,it.color,mcx,top+2,mcz+ml/2-dl/2-1));          // nórdico
+    g.add(box3(2.5,18,dl,it.color,mcx-bk*(-1)*(mw/2+1)*-1,top-8,mcz+ml/2-dl/2-1));                   // caída por el lado abierto
+    for(const sx of [-1,1]){ const p=box3(mw/2-9,11,38,0xffffff,mcx+sx*mw/4,top+6,-d/2+ph+22); p.rotation.x=-.14; g.add(p); }
+    const segs=2, seg=(ml-2)/segs; for(let i=0;i<segs;i++){ g.add(box3(pb,48,seg-1,F,bk*(w/2-pb/2),top+24,-d/2+ph+seg/2+i*(seg+1))); g.add(box3(pb-3,40,seg-6,Fd,bk*(w/2-pb/2)-bk*(pb/2+.1),top+24,-d/2+ph+seg/2+i*(seg+1))); }
+    g.add(box3(w,top+50-FH,ph,F,0,FH+(top+50-FH)/2,-d/2+ph/2));                                       // cabecero
+    const sh=26, sy=top+50+sh/2; g.add(box3(w,sh,ph+4,0x26272b,0,sy,-d/2+ph/2+1));                  // estantería superior
+    for(let i=0;i<3;i++){ const cw=(w-12)/3-3, cx=-w/2+6+cw/2+i*((w-12)/3); g.add(box3(cw,sh-8,1,0xf3d9ae,cx,sy,-d/2+ph+2.5,{emissive:0xffb347,emissiveIntensity:.45}));
+      g.add(box3(cw*.55,9,6,[0xc9a24a,0x4a7fb5,0xb55a4a][i],cx,sy-sh/2+8,-d/2+ph-1)); }
+  } else if(/^Cama|^Cuna/.test(n)){
     for(const sx of [-1,1]) for(const sz of [-1,1]) leg(sx*(w/2-5),sz*(d/2-5),10,6,dark);
     g.add(box3(w,15,d,wood,0,17.5,0)); g.add(box3(w-4,h-25,d-4,0xf3f1ec,0,25+(h-25)/2,0));       // somier + colchón
     g.add(box3(w-2,6,d-58,col,0,h+3,29));                                                        // nórdico
