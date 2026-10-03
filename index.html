@@ -39,7 +39,8 @@ svg{width:100%;height:100%;display:block;touch-action:none;user-select:none;back
   <button id="t-select" class="on" title="V">Seleccionar</button>
   <button id="t-wall" title="W">Dibujar tabique</button>
   <button id="undo" title="Ctrl+Z">↶</button><button id="redo" title="Ctrl+Y">↷</button>
-  <button id="snap" class="on">Imán 5 cm</button>
+  <button id="snap" class="on">Rejilla 5 cm</button><button id="mag" class="on">Imán a paredes</button>
+  <select id="lay" title="Propuestas de distribución"><option value="">Propuesta…</option></select>
   <button id="fit">Ajustar vista</button>
   <span style="flex:1"></span>
   <button id="save">Guardar JSON</button><button id="load">Abrir JSON</button>
@@ -67,7 +68,7 @@ const CAT = {
 const COLORS = {Dormitorio:"#7aa7e0",Estudio:"#e0b36a",Salón:"#8fc79a",Otros:"#b7a2d6",Aperturas:"#fff"};
 
 let S = {room:{w:400,h:300}, walls:[], items:[]};
-let tool="select", snapOn=true, sel=null, hist=[], fut=[], uid=1, drag=null, vb={x:-60,y:-60,w:520,h:420};
+let tool="select", snapOn=true, magOn=true, sel=null, hist=[], fut=[], uid=1, drag=null, vb={x:-60,y:-60,w:520,h:420};
 
 /* ---------- estado / historial ---------- */
 const snapshot = () => JSON.stringify(S);
@@ -137,14 +138,30 @@ function drawItem(it){
   } else {
     el("rect",{x:-it.w/2,y:-it.d/2,width:it.w,height:it.d,fill:it.color,"fill-opacity":.75,stroke:stroke,"stroke-width":s?2.5:1,rx:2},g);
   }
-  // etiqueta (sin espejar ni girar boca abajo)
-  const t=el("text",{x:0,y:it.kind==="door"?-it.w/2:0,"text-anchor":"middle","dominant-baseline":"middle","font-size":Math.max(7,Math.min(10,Math.min(it.w,it.d>30?it.w:999)/7)),fill:"#111","pointer-events":"none"},g);
-  t.setAttribute("transform",`scale(${it.fx?-1:1} ${it.fy?-1:1}) rotate(${-it.rot})`);
-  t.textContent=it.kind?"":`${it.name} ${it.w}×${it.d}`;
-  if(it.kind==="text"){ t.textContent=it.name; t.setAttribute("font-size",it.d*.6); t.setAttribute("font-weight",600); t.setAttribute("fill","currentColor"); t.setAttribute("fill-opacity",".55"); }
-  else if(it.kind&&s){ t.textContent=it.name; }
+  // etiqueta: sigue el eje largo del mueble y se ajusta de tamaño para caber
+  const label=it.kind==="text"?it.name:it.kind?(s?it.name:""):`${it.name} ${it.w}×${it.d}`;
+  const vert=it.rot%180===90, along=vert?it.d>=0&&it.w:it.w;
+  const t=el("text",{x:0,y:it.kind==="door"?-it.w/2:0,"text-anchor":"middle","dominant-baseline":"middle","pointer-events":"none",fill:"#111"},g);
+  t.setAttribute("transform",`scale(${it.fx?-1:1} ${it.fy?-1:1})`+(vert?"":` rotate(${-it.rot})`));
+  t.textContent=label;
+  let fs=Math.max(5,Math.min(10,(along*1.6)/Math.max(1,label.length)));
+  if(it.kind==="text"){ fs=it.d*.6; t.setAttribute("font-weight",600); t.setAttribute("fill","currentColor"); t.setAttribute("fill-opacity",".55"); }
+  t.setAttribute("font-size",fs);
 }
 
+/* imán: pega los bordes del mueble a caras de paredes/tabiques a <8 cm (solo giros múltiplos de 90°) */
+function magnet(o,x,y){
+  if(o.rot%90) return [x,y];
+  const sw=o.rot%180===0, hx=(sw?o.w:o.d)/2, hy=(sw?o.d:o.w)/2, T=8;
+  const V=[[0,0,S.room.h],[S.room.w,0,S.room.h]], H=[[0,0,S.room.w],[S.room.h,0,S.room.w]]; // [pos, desde, hasta]
+  for(const w of S.walls){ const t=w.t/2;
+    if(w.x1===w.x2){ const a=Math.min(w.y1,w.y2),b=Math.max(w.y1,w.y2); V.push([w.x1-t,a,b],[w.x1+t,a,b]); }
+    else if(w.y1===w.y2){ const a=Math.min(w.x1,w.x2),b=Math.max(w.x1,w.x2); H.push([w.y1-t,a,b],[w.y1+t,a,b]); } }
+  let bx=T,by=T,nx=x,ny=y;
+  for(const [f,a,b] of V){ if(y+hy<a-T||y-hy>b+T)continue; for(const c of [f+hx,f-hx]){ const d=Math.abs(x-c); if(d<bx){bx=d;nx=c;} } }
+  for(const [f,a,b] of H){ if(x+hx<a-T||x-hx>b+T)continue; for(const c of [f+hy,f-hy]){ const d=Math.abs(y-c); if(d<by){by=d;ny=c;} } }
+  return [nx,ny];
+}
 /* ---------- paneles ---------- */
 function buildLib(){
   const L=$("#lib"); L.innerHTML="<h3>Habitación (interior)</h3>";
@@ -181,20 +198,22 @@ function props(){
     <div class="row"><label>X (centro)</label><input id="p-x" type="number" value="${Math.round(o.x)}"></div>
     <div class="row"><label>Y (centro)</label><input id="p-y" type="number" value="${Math.round(o.y)}"></div>
     <div class="row"><label>Giro °</label><input id="p-r" type="number" value="${o.rot}"></div>
+    ${o.kind?"":`<div class="row"><label>Alto cm</label><input id="p-h" type="number" value="${o.h||0}"></div><div class="row"><label>Elevación cm</label><input id="p-z" type="number" value="${o.z||0}"></div>`}
     ${o.kind?"":`<div class="row"><label>Color</label><input id="p-c" type="color" value="${o.color}"></div>`}
-    <div class="btns"><button id="p-rot">Girar 90° (R)</button><button id="p-fx">Espejo H</button><button id="p-fy">Espejo V</button><button id="p-dup">Duplicar</button><button id="p-del">Eliminar</button></div>`;
+    <div class="btns"><button id="p-rot">Girar 90° (R)</button><button id="p-m15">−15°</button><button id="p-p15">+15°</button><button id="p-fx">Espejo H</button><button id="p-fy">Espejo V</button><button id="p-dup">Duplicar</button><button id="p-del">Eliminar</button></div>`;
     const bind=(id,f)=>{ const e=$(id); if(e) e.onchange=ev=>{ f(ev.target.value); commit(); render(); }; };
     bind("#p-name",v=>o.name=v); bind("#p-w",v=>o.w=Math.max(5,+v||o.w)); bind("#p-d",v=>o.d=Math.max(5,+v||o.d));
-    bind("#p-x",v=>o.x=+v); bind("#p-y",v=>o.y=+v); bind("#p-r",v=>o.rot=((+v%360)+360)%360); bind("#p-c",v=>o.color=v);
-    $("#p-rot").onclick=()=>rot(o); $("#p-fx").onclick=()=>{o.fx=!o.fx;commit();render()}; $("#p-fy").onclick=()=>{o.fy=!o.fy;commit();render()};
+    bind("#p-x",v=>o.x=+v); bind("#p-y",v=>o.y=+v); bind("#p-r",v=>o.rot=((+v%360)+360)%360); bind("#p-c",v=>o.color=v); bind("#p-h",v=>o.h=+v); bind("#p-z",v=>o.z=+v);
+    $("#p-rot").onclick=()=>rot(o); $("#p-m15").onclick=()=>{o.rot=(o.rot+345)%360;commit();render()}; $("#p-p15").onclick=()=>{o.rot=(o.rot+15)%360;commit();render()}; $("#p-fx").onclick=()=>{o.fx=!o.fx;commit();render()}; $("#p-fy").onclick=()=>{o.fy=!o.fy;commit();render()};
     $("#p-dup").onclick=()=>dup(o);
   }
   $("#p-del").onclick=del;
+  if(!isWall(o)&&/^TV/i.test(o.name)){ const bed=S.items.find(i=>/^Cama/i.test(i.name)); if(bed){ const d=Math.round(Math.hypot(o.x-bed.x,o.y-bed.y)); P.insertAdjacentHTML("beforeend",`<h3>Visionado</h3><p>Distancia TV–centro cama: <b>${d} cm</b><br><span style="color:var(--mut)">Para 55" se recomiendan 150–250 cm al ojo. Centro de pantalla a ~100–110 cm del suelo con cama baja.</span></p>`); } }
 }
 function rot(o){ o.rot=(o.rot+90)%360; commit(); render(); }
 function dup(o){ const c={...o,id:uid++,x:o.x+20,y:o.y+20}; S.items.push(c); sel=c.id; commit(); render(); }
 function del(){ if(!sel)return; S.items=S.items.filter(i=>i.id!==sel); S.walls=S.walls.filter(w=>w.id!==sel); sel=null; commit(); render(); }
-function hint(){ $("#hint").textContent = tool==="wall" ? "Arrastra para trazar un tabique (Alt = ángulo libre)" : "Arrastra elementos · R girar · Supr borrar · rueda = zoom · arrastrar fondo = mover vista"; }
+function hint(){ $("#hint").textContent = tool==="wall" ? "Arrastra para trazar un tabique (Alt = ángulo libre)" : "Arrastra elementos (Alt = sin imán) · R girar · Supr borrar · rueda = zoom · arrastrar fondo = mover vista"; }
 
 /* ---------- interacción ---------- */
 function setTool(t){ tool=t; $("#t-select").classList.toggle("on",t==="select"); $("#t-wall").classList.toggle("on",t==="wall"); hint(); }
@@ -211,7 +230,7 @@ svg.addEventListener("pointermove",e=>{
   if(!drag)return; const p=pt(e);
   if(drag.type==="pan"){ const k=vb.w/svg.clientWidth; vb.x=drag.vb0.x-(e.clientX-drag.sx)*k; vb.y=drag.vb0.y-(e.clientY-drag.sy)*k; render(); return; }
   if(drag.type==="newwall"){ let x=sn(p.x),y=sn(p.y); if(!e.altKey){ const dx=Math.abs(x-drag.a.x),dy=Math.abs(y-drag.a.y); if(dy<dx*.15)y=drag.a.y; else if(dx<dy*.15)x=drag.a.x; } Object.assign(drag.ghost,{x2:x,y2:y}); render(); return; }
-  if(drag.type==="move"){ drag.moved=true; drag.o.x=sn(p.x+drag.dx); drag.o.y=sn(p.y+drag.dy); render(); return; }
+  if(drag.type==="move"){ drag.moved=true; let x=sn(p.x+drag.dx),y=sn(p.y+drag.dy); if(magOn&&!e.altKey&&!drag.o.kind)[x,y]=magnet(drag.o,x,y); drag.o.x=x; drag.o.y=y; render(); return; }
   if(drag.type==="movewall"){ drag.moved=true; const o=drag.o,s=drag.orig,dx=sn(p.x-drag.p0.x),dy=sn(p.y-drag.p0.y); o.x1=s.x1+dx;o.y1=s.y1+dy;o.x2=s.x2+dx;o.y2=s.y2+dy; render(); return; }
   if(drag.type==="handle"){ drag.moved=true; const o=drag.o; let x=sn(p.x),y=sn(p.y); const ox=drag.k===1?o.x2:o.x1, oy=drag.k===1?o.y2:o.y1; if(!e.altKey){ const dx=Math.abs(x-ox),dy=Math.abs(y-oy); if(dy<dx*.15)y=oy; else if(dx<dy*.15)x=ox; } if(drag.k===1){o.x1=x;o.y1=y}else{o.x2=x;o.y2=y} render(); }
 });
@@ -241,6 +260,7 @@ addEventListener("keydown",e=>{
 function fit(){ const m=60,r=S.room; const ar=svg.clientWidth/Math.max(1,svg.clientHeight)||1.5; let w=r.w+2*m,h=r.h+2*m; if(w/h<ar)w=h*ar; else h=w/ar; vb={x:r.w/2-w/2,y:r.h/2-h/2,w,h}; render(); }
 $("#t-select").onclick=()=>setTool("select"); $("#t-wall").onclick=()=>setTool("wall");
 $("#undo").onclick=undo; $("#redo").onclick=redo; $("#fit").onclick=fit;
+$("#mag").onclick=e=>{ magOn=!magOn; e.target.classList.toggle("on",magOn); };
 $("#snap").onclick=e=>{ snapOn=!snapOn; e.target.classList.toggle("on",snapOn); };
 $("#reset").onclick=()=>{ if(confirm("¿Restaurar el plano del croquis? Se pierde el diseño actual.")){ S=planoInicial(); uid=100; sel=null; commit(); buildLib(); fit(); } };
 $("#clear").onclick=()=>{ if(confirm("¿Vaciar el diseño (se conserva el tamaño de la habitación)?")){ S.items=[];S.walls=[];sel=null;commit();render(); } };
@@ -261,8 +281,7 @@ $("#png").onclick=()=>{
 function planoInicial(){
   let n=1; const W=(x1,y1,x2,y2)=>({id:n++,x1,y1,x2,y2,t:10});
   const I=(name,w,d,kind,x,y,rot,fx,color)=>({id:n++,name,w,d,kind,x,y,rot,fx:!!fx,fy:false,color:color||"#999"});
-  const M="#7aa7e0", A="#e0b36a";
-  return {room:{w:680,h:400},
+  const base={room:{w:680,h:400},
     walls:[W(380,0,380,320),W(200,320,460,320),W(200,320,200,400),W(460,320,460,400)],
     items:[
       I("Ventana 110",110,12,"window",185,-6,0),
@@ -271,14 +290,30 @@ function planoInicial(){
       I("Puerta 70",70,10,"door",280,406,0),
       I("Puerta 70 (a gamer)",70,10,"door",460,360,90),
       I("DORMIR (a retornar)",160,24,"text",110,300,0),
-      I("GAMER (secundaria)",200,30,"text",540,150,0),
-      /* propuesta A: cabecero contra el tabique */
-      I("Cama 140",140,200,null,275,170,90,false,M),
-      I("Mesita noche",40,35,null,355,75,90,false,M),
-      I("Armario 140",140,60,null,30,70,90,false,A),
-      I("Armario nuevo (a diseñar)",200,60,null,100,370,0,false,A),
-      I("Escritorio 120",120,60,null,185,30,0,false,"#8fc79a")
+      I("GAMER (secundaria)",200,30,"text",540,150,0)
     ]};
+  n=100; base.items.push(...mobiliario("A",()=>n++));
+  return base;
+}
+/* Propuestas de distribución. [nombre, ancho, fondo, x, y, giro°, color, {h alto, z elevación}] */
+const MC="#7aa7e0", MA="#e0b36a", MD="#8fc79a", MT="#4b5563";
+const LAYOUTS={
+  A:{label:"A · Cabecero en tabique (este), TV en pared oeste",items:[
+    ["Cama 140",140,200,275,170,90,MC,{h:45}],["Mesita noche",40,35,355,80,90,MC,{h:50}],
+    ["TV 55\" colgada",123,6,4,75,90,MT,{h:71,z:100}],
+    ["Armario 140x180",140,60,70,370,0,MA,{h:180}],["Armario nuevo (a diseñar)",100,60,305,30,0,MA,{h:200}],
+    ["Escritorio 120",120,60,185,30,0,MD,{h:75}]]},
+  B:{label:"B · Cabecero en pared norte (bajo ventana), TV en pared sur",items:[
+    ["Cama 140",140,200,150,100,0,MC,{h:45}],["Mesita noche",40,35,240,17,0,MC,{h:50}],
+    ["TV 55\" colgada",123,6,130,397,0,MT,{h:71,z:100}],
+    ["Armario 140x180",140,60,345,75,90,MA,{h:180}],["Armario nuevo (a diseñar)",100,60,345,200,90,MA,{h:200}],
+    ["Escritorio 120",120,60,30,70,90,MD,{h:75}]]}
+};
+function mobiliario(k,nextId){
+  return LAYOUTS[k].items.map(([name,w,d,x,y,rot,color,ex])=>({id:nextId(),name,w,d,kind:null,x,y,rot,fx:false,fy:false,color,h:ex.h||0,z:ex.z||0}));
+}
+function aplicarLayout(k){
+  if(!LAYOUTS[k])return; S.items=S.items.filter(i=>i.kind); S.items.push(...mobiliario(k,()=>uid++)); sel=null; commit(); render();
 }
 /* ---------- init ---------- */
 (function init(){
@@ -286,6 +321,8 @@ function planoInicial(){
   if(j){ try{ S=JSON.parse(j); }catch{} }
   else { S=planoInicial(); }
   uid=1+Math.max(0,...S.items.map(i=>i.id),...S.walls.map(w=>w.id));
+  const L=$("#lay"); for(const k in LAYOUTS) L.insertAdjacentHTML("beforeend",`<option value="${k}">${LAYOUTS[k].label}</option>`);
+  L.onchange=()=>{ if(L.value&&confirm("Esto recoloca todo el mobiliario según la propuesta (puedes deshacer con Ctrl+Z). ¿Continuar?")) aplicarLayout(L.value); L.value=""; };
   hist=[snapshot()]; buildLib(); fit(); addEventListener("resize",fit);
 })();
 </script>
