@@ -31,6 +31,15 @@ svg{width:100%;height:100%;display:block;touch-action:none;user-select:none;back
 #hint{position:absolute;left:10px;bottom:8px;font-size:12px;color:var(--mut);background:var(--panel);padding:4px 8px;border-radius:6px;border:1px solid var(--line)}
 .btns{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}
 @media (max-width:900px){body{grid-template-columns:1fr;grid-template-rows:auto 1fr auto auto;height:auto;overflow:auto}#stage{height:60vh}#lib,#props{border:0}}
+#v3{position:absolute;inset:0;background:var(--bg);display:flex;flex-direction:column}
+#v3[hidden]{display:none}
+#v3bar{display:flex;gap:12px;flex-wrap:wrap;align-items:center;padding:6px 10px;background:var(--panel);border-bottom:1px solid var(--line);font-size:13px}
+#v3bar select{padding:3px 6px;border:1px solid var(--line);border-radius:5px;background:var(--bg)}
+#v3c{flex:1;min-height:0;position:relative}
+#v3c canvas{display:block;width:100%;height:100%}
+#v3l{position:absolute;left:0;right:0;top:44px;display:flex;pointer-events:none}
+#v3l[hidden]{display:none}
+#v3l span{flex:1;text-align:center;font-weight:600;background:#ffffffb3;color:#111;margin:6px 12px;padding:3px 8px;border-radius:6px}
 </style>
 </head>
 <body>
@@ -41,16 +50,28 @@ svg{width:100%;height:100%;display:block;touch-action:none;user-select:none;back
   <button id="undo" title="Ctrl+Z">↶</button><button id="redo" title="Ctrl+Y">↷</button>
   <button id="snap" class="on">Rejilla 5 cm</button><button id="mag" class="on">Imán a paredes</button>
   <select id="lay" title="Propuestas de distribución"><option value="">Propuesta…</option></select>
-  <button id="fit">Ajustar vista</button>
+  <button id="fit">Ajustar vista</button><button id="b3d">Vista 3D</button>
   <span style="flex:1"></span>
   <button id="save">Guardar JSON</button><button id="load">Abrir JSON</button>
   <button id="png">Exportar PNG</button><button id="reset">Plano inicial</button><button id="clear">Vaciar</button>
   <input id="file" type="file" accept=".json" hidden>
 </header>
 <aside id="lib"></aside>
-<div id="stage"><svg id="svg"></svg><div id="hint"></div></div>
+<div id="stage"><svg id="svg"></svg><div id="hint"></div>
+  <div id="v3" hidden>
+    <div id="v3bar">
+      <label>Cámara <select id="v3cam"><option value="orbit">Orbital (isométrica)</option><option value="top">Cenital</option><option value="door">Desde la puerta</option><option value="bed">Desde la cama (hacia la TV)</option></select></label>
+      <label>Paredes <select id="v3wall"><option value="110">Corte a 110 cm</option><option value="250">Completas (250 cm)</option><option value="0">Sin paredes</option></select></label>
+      <label><input type="checkbox" id="v3cmp"> Comparar A | B</label>
+      <button id="v3png">Captura PNG</button>
+    </div>
+    <div id="v3c"></div>
+    <div id="v3l" hidden><span>A · Cabecero en tabique</span><span>B · Cabecero bajo ventana</span></div>
+  </div></div>
 <aside id="props"></aside>
 
+<script src="vendor/three.min.js"></script>
+<script src="vendor/OrbitControls.js"></script>
 <script>
 "use strict";
 const $ = s => document.querySelector(s);
@@ -89,6 +110,7 @@ const isWall = o => o && "x1" in o;
 
 /* ---------- render ---------- */
 function render(){
+  if(typeof V3!=="undefined"&&V3.on) V3.dirty=true;
   const {w:RW,h:RH}=S.room, WT=12;
   svg.setAttribute("viewBox",`${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
   svg.textContent="";
@@ -300,21 +322,114 @@ const MC="#7aa7e0", MA="#e0b36a", MD="#8fc79a", MT="#4b5563";
 const LAYOUTS={
   A:{label:"A · Cabecero en tabique (este), TV en pared oeste",items:[
     ["Cama 140",140,200,275,170,90,MC,{h:45}],["Mesita noche",40,35,355,80,90,MC,{h:50}],
-    ["TV 55\" colgada",123,6,4,75,90,MT,{h:71,z:100}],
-    ["Armario 140x180",140,60,70,370,0,MA,{h:180}],["Armario nuevo (a diseñar)",100,60,305,30,0,MA,{h:200}],
+    ["TV 55\" colgada",123,6,4,75,90,MT,{h:71,z:75,fy:1}],
+    ["Armario 140x180",140,60,70,370,0,MA,{h:180,fy:1}],["Armario nuevo (a diseñar)",100,60,305,30,0,MA,{h:200}],
     ["Escritorio 120",120,60,185,30,0,MD,{h:75}]]},
   B:{label:"B · Cabecero en pared norte (bajo ventana), TV en pared sur",items:[
     ["Cama 140",140,200,150,100,0,MC,{h:45}],["Mesita noche",40,35,240,17,0,MC,{h:50}],
-    ["TV 55\" colgada",123,6,130,397,0,MT,{h:71,z:100}],
+    ["TV 55\" colgada",123,6,130,397,0,MT,{h:71,z:75,fy:1}],
     ["Armario 140x180",140,60,345,75,90,MA,{h:180}],["Armario nuevo (a diseñar)",100,60,345,200,90,MA,{h:200}],
     ["Escritorio 120",120,60,30,70,90,MD,{h:75}]]}
 };
 function mobiliario(k,nextId){
-  return LAYOUTS[k].items.map(([name,w,d,x,y,rot,color,ex])=>({id:nextId(),name,w,d,kind:null,x,y,rot,fx:false,fy:false,color,h:ex.h||0,z:ex.z||0}));
+  return LAYOUTS[k].items.map(([name,w,d,x,y,rot,color,ex])=>({id:nextId(),name,w,d,kind:null,x,y,rot,fx:false,fy:!!ex.fy,color,h:ex.h||0,z:ex.z||0}));
 }
 function aplicarLayout(k){
   if(!LAYOUTS[k])return; S.items=S.items.filter(i=>i.kind); S.items.push(...mobiliario(k,()=>uid++)); sel=null; commit(); render();
 }
+/* ---------- Vista 3D (three.js, cm → unidades; plano X→x, plano Y→z, altura→y) ---------- */
+var V3={on:false,dirty:false,wallH:110,cmp:false,cam:"orbit"};
+const DEFH={Cama:50,Mesita:50,Armario:200,Escritorio:75,Mesa:75,Silla:90,Sofá:85,Cómoda:85,Estantería:180,Librería:200,Butaca:85,Mueble:50,TV:70,Radiador:60,Pilar:250,Alfombra:1,Cuna:90,Bloque:100};
+const defH = n => { for(const k in DEFH) if(n.startsWith(k)) return DEFH[k]; return 50; };
+function box3(w,h,d,color,x,y,z,opts={}){
+  const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshStandardMaterial({color,roughness:.85,metalness:0,...opts}));
+  m.position.set(x,y,z); m.castShadow=true; m.receiveShadow=true; return m;
+}
+function buildScene(items){
+  const sc=new THREE.Scene(), W=S.room.w, H=S.room.h, WH=V3.wallH;
+  sc.background=new THREE.Color(getComputedStyle(document.body).getPropertyValue("--bg").trim()||"#f4f5f7");
+  sc.add(new THREE.HemisphereLight(0xffffff,0x8a8a8a,.75));
+  const sun=new THREE.DirectionalLight(0xffffff,.65); sun.position.set(W*.2,700,H*1.4); sun.target.position.set(W/2,0,H/2);
+  sun.castShadow=true; sun.shadow.mapSize.set(2048,2048); const c=sun.shadow.camera; c.left=-500;c.right=500;c.top=500;c.bottom=-500;c.near=100;c.far=1800; sc.add(sun,sun.target);
+  const floor=box3(W,2,H,0xc8b394,W/2,-1,H/2); floor.castShadow=false; sc.add(floor);
+  // paredes: exteriores (12 cm, hacia fuera) + tabiques
+  const segs=[
+    {ax:"x",fix:-6,t:12,a:-12,b:W+12,c:0xdedad2},{ax:"x",fix:H+6,t:12,a:-12,b:W+12,c:0xdedad2},
+    {ax:"z",fix:-6,t:12,a:0,b:H,c:0xdedad2},{ax:"z",fix:W+6,t:12,a:0,b:H,c:0xdedad2}];
+  for(const w of S.walls){ if(w.x1===w.x2) segs.push({ax:"z",fix:w.x1,t:w.t,a:Math.min(w.y1,w.y2),b:Math.max(w.y1,w.y2),c:0xf1eee7});
+    else if(w.y1===w.y2) segs.push({ax:"x",fix:w.y1,t:w.t,a:Math.min(w.x1,w.x2),b:Math.max(w.x1,w.x2),c:0xf1eee7}); }
+  const ops=segs.map(()=>[]);
+  for(const it of S.items){ if(it.kind!=="door"&&it.kind!=="window") continue;
+    const ax=it.rot%180===0?"x":"z", al=ax==="x"?it.x:it.y, pe=ax==="x"?it.y:it.x;
+    segs.forEach((g,i)=>{ if(g.ax===ax&&Math.abs(pe-g.fix)<=g.t/2+10&&al>=g.a-1&&al<=g.b+1) ops[i].push({c:al,w:it.w,y0:it.kind==="door"?0:130,y1:it.kind==="door"?205:175}); }); }
+  segs.forEach((g,i)=>{ if(WH<=0) return;
+    const put=(u0,u1,y0,y1)=>{ y1=Math.min(y1,WH); if(u1-u0<.5||y1-y0<.5) return; const L=u1-u0,hh=y1-y0,m=(u0+u1)/2;
+      sc.add(g.ax==="x"?box3(L,hh,g.t,g.c,m,y0+hh/2,g.fix):box3(g.t,hh,L,g.c,g.fix,y0+hh/2,m)); };
+    let cur=g.a; for(const o of ops[i].sort((p,q)=>p.c-q.c)){ const f=o.c-o.w/2,t=o.c+o.w/2; put(cur,f,0,WH); put(f,t,0,o.y0); put(f,t,o.y1,WH); cur=t; } put(cur,g.b,0,WH); });
+  // elementos
+  for(const it of items){ const g=new THREE.Group(); g.position.set(it.x,0,it.y); g.rotation.y=-it.rot*Math.PI/180; g.scale.set(it.fx?-1:1,1,it.fy?-1:1);
+    const w=it.w,d=it.d;
+    if(it.kind==="door"){ const lh=WH>0?Math.min(203,WH):203; g.add(box3(4,lh,w,0xb98b5e,-w/2,lh/2,-w/2)); }
+    else if(it.kind==="window"){ g.add(box3(w,45,2,0x9fd3ee,0,152,0,{transparent:true,opacity:.35,roughness:.1})); }
+    else if(it.kind==="text"){ continue; }
+    else furniture(g,it);
+    sc.add(g); }
+  return sc;
+}
+function furniture(g,it){
+  const w=it.w,d=it.d,h=it.h||defH(it.name),z0=it.z||0,col=new THREE.Color(it.color), n=it.name;
+  if(/^Cama|^Cuna/.test(n)){
+    g.add(box3(w,25,d,0x8b6b4a,0,12.5,0)); g.add(box3(w-4,h-25,d-4,0xf3f1ec,0,25+(h-25)/2,0));
+    g.add(box3(w-2,h-21,d-60,col,0,h+1.5,30));                       // nórdico
+    for(const sx of [-1,1]) g.add(box3(w/2-8,10,38,0xffffff,sx*(w/4),h+5,-d/2+28));
+    g.add(box3(w+6,h+55,6,0x8b6b4a,0,(h+55)/2,-d/2-1));              // cabecero (lado -z)
+  } else if(/^Armario|^Estantería|^Librería|^Cómoda/.test(n)){
+    g.add(box3(w,h,d,col,0,h/2,0)); const k=Math.max(2,Math.round(w/50));
+    for(let i=1;i<k;i++){ const x=-w/2+i*w/k; g.add(box3(.8,h-6,1,0x6b5a40,x,h/2,d/2+.3)); g.add(box3(1.5,22,1.5,0x333333,x-4,h*.5,d/2+1)); g.add(box3(1.5,22,1.5,0x333333,x+4,h*.5,d/2+1)); }
+  } else if(/^Escritorio|^Mesa/.test(n)&&!/noche/.test(n)){
+    g.add(box3(w,3,d,col,0,h-1.5,0)); for(const sx of[-1,1])for(const sz of[-1,1]) g.add(box3(4,h-3,4,0x555555,sx*(w/2-4),(h-3)/2,sz*(d/2-4)));
+  } else if(/^TV/.test(n)){
+    g.add(box3(w,h,d,0x111111,0,z0+h/2,0)); g.add(box3(w-4,h-4,1,0x22313f,0,z0+h/2,d/2+.1,{emissive:0x0a1520}));
+    return;
+  } else if(/Mesita/.test(n)){
+    g.add(box3(w,h,d,col,0,h/2,0)); g.add(box3(w-6,2,1,0x333333,0,h-12,d/2+.2)); g.add(box3(w-6,2,1,0x333333,0,h-30,d/2+.2));
+  } else g.add(box3(w,h,d,col,0,z0+h/2,0));
+}
+let R3=null,CT=null,CAM3=null,SC3=[],RO=null;
+function init3D(){
+  const host=$("#v3c"); R3=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true}); R3.setPixelRatio(Math.min(2,devicePixelRatio||1));
+  R3.shadowMap.enabled=true; R3.shadowMap.type=THREE.PCFSoftShadowMap; R3.setScissorTest(true); host.appendChild(R3.domElement);
+  CAM3=new THREE.PerspectiveCamera(45,1,5,4000); CT=new THREE.OrbitControls(CAM3,R3.domElement); CT.maxPolarAngle=Math.PI*.499;
+  RO=new ResizeObserver(()=>{ R3.setSize(host.clientWidth,host.clientHeight,false); R3.domElement.style.width="100%"; R3.domElement.style.height="100%"; }); RO.observe(host);
+  setCam(V3.cam);
+}
+function setCam(k){
+  V3.cam=k; const W=S.room.w,H=S.room.h, bed=S.items.find(i=>/^Cama/.test(i.name)), tv=S.items.find(i=>/^TV/.test(i.name));
+  const f=V3.cmp?1.45:1; let p=[W/2+100*f,600*f,H+470*f], t=[W/2,0,H/2];
+  if(k==="top"){ p=[W/2,Math.max(W,H)*1.25*f,H/2+1]; }
+  if(k==="door"){ p=[18,165,H*.55]; t=[W*.6,90,H*.45]; }
+  if(k==="bed"){ if(bed){ p=[bed.x,95,bed.y]; } t=tv?[tv.x,(tv.z||75)+(tv.h||71)/2,tv.y]:[W/2,90,H/2]; }
+  CAM3.position.set(...p); CT.target.set(...t); CT.update();
+}
+function loop3D(tok){
+  if(!V3.on||tok!==V3.tok) return; requestAnimationFrame(()=>loop3D(tok));
+  if(V3.dirty){ V3.dirty=false; SC3.forEach(s=>s.traverse(o=>{ if(o.geometry)o.geometry.dispose(); if(o.material)o.material.dispose(); }));
+    const fixed=S.items.filter(i=>i.kind);
+    SC3=V3.cmp?["A","B"].map(k=>buildScene(fixed.concat(mobiliario(k,()=>0)))):[buildScene(S.items)]; }
+  CT.update(); const w=R3.domElement.clientWidth,h=R3.domElement.clientHeight, n=SC3.length;
+  for(let i=0;i<n;i++){ const vw=Math.floor(w/n); R3.setViewport(i*vw,0,vw,h); R3.setScissor(i*vw,0,vw,h); CAM3.aspect=vw/h; CAM3.updateProjectionMatrix(); R3.render(SC3[i],CAM3); }
+}
+function toggle3D(){
+  if(typeof THREE==="undefined"){ alert("No se pudo cargar vendor/three.min.js"); return; }
+  V3.on=!V3.on; $("#v3").hidden=!V3.on; $("#b3d").classList.toggle("on",V3.on);
+  if(V3.on){ if(!R3) init3D(); V3.dirty=true; setCam(V3.cam); const tok=V3.tok=(V3.tok||0)+1; requestAnimationFrame(()=>loop3D(tok)); }
+}
+$("#b3d").onclick=toggle3D;
+$("#v3cam").onchange=e=>setCam(e.target.value);
+$("#v3wall").onchange=e=>{ V3.wallH=+e.target.value; V3.dirty=true; };
+$("#v3cmp").onchange=e=>{ V3.cmp=e.target.checked; $("#v3l").hidden=!V3.cmp; V3.dirty=true; if(V3.cam==="orbit"||V3.cam==="top") setCam(V3.cam); };
+$("#v3png").onclick=()=>{ V3.dirty=true; requestAnimationFrame(()=>R3.domElement.toBlob(b=>download(b,"habitacion-3d.png"))); };
+
 /* ---------- init ---------- */
 (function init(){
   let j=null; try{ j=localStorage.getItem(KEY); }catch{}
