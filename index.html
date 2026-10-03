@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Diseño de habitación</title>
+<style>
+:root{--bg:#f4f5f7;--panel:#fff;--ink:#1c2330;--mut:#667085;--line:#d9dde4;--acc:#2563eb;--wall:#8a8f98}
+@media (prefers-color-scheme:dark){:root{--bg:#12151b;--panel:#1b2028;--ink:#e6e9ef;--mut:#8b94a3;--line:#2b323d;--acc:#5b8def;--wall:#9aa1ad}}
+*{box-sizing:border-box}
+body{margin:0;font:14px/1.35 system-ui,sans-serif;background:var(--bg);color:var(--ink);height:100vh;display:grid;grid-template-columns:250px 1fr 250px;grid-template-rows:auto 1fr;overflow:hidden}
+header{grid-column:1/-1;display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:8px 12px;background:var(--panel);border-bottom:1px solid var(--line)}
+header h1{font-size:15px;margin:0 10px 0 0}
+button,select,input{font:inherit;color:inherit}
+button{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:5px 10px;cursor:pointer}
+button:hover{border-color:var(--acc)}
+button.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+aside{background:var(--panel);overflow:auto;padding:10px}
+#lib{border-right:1px solid var(--line)}
+#props{border-left:1px solid var(--line)}
+aside h3{margin:12px 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut)}
+aside h3:first-child{margin-top:0}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.grid button{text-align:left;font-size:12px;padding:6px}
+.grid small{display:block;color:var(--mut)}
+.row{display:grid;grid-template-columns:80px 1fr;gap:6px;align-items:center;margin:5px 0}
+.row input{width:100%;padding:4px 6px;border:1px solid var(--line);border-radius:5px;background:var(--bg)}
+.row input[type=color]{padding:0;height:28px}
+#stage{position:relative;min-width:0}
+svg{width:100%;height:100%;display:block;touch-action:none;user-select:none;background:var(--bg)}
+#hint{position:absolute;left:10px;bottom:8px;font-size:12px;color:var(--mut);background:var(--panel);padding:4px 8px;border-radius:6px;border:1px solid var(--line)}
+.btns{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}
+@media (max-width:900px){body{grid-template-columns:1fr;grid-template-rows:auto 1fr auto auto;height:auto;overflow:auto}#stage{height:60vh}#lib,#props{border:0}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Diseño de habitación</h1>
+  <button id="t-select" class="on" title="V">Seleccionar</button>
+  <button id="t-wall" title="W">Dibujar tabique</button>
+  <button id="undo" title="Ctrl+Z">↶</button><button id="redo" title="Ctrl+Y">↷</button>
+  <button id="snap" class="on">Imán 5 cm</button>
+  <button id="fit">Ajustar vista</button>
+  <span style="flex:1"></span>
+  <button id="save">Guardar JSON</button><button id="load">Abrir JSON</button>
+  <button id="png">Exportar PNG</button><button id="clear">Vaciar</button>
+  <input id="file" type="file" accept=".json" hidden>
+</header>
+<aside id="lib"></aside>
+<div id="stage"><svg id="svg"></svg><div id="hint"></div></div>
+<aside id="props"></aside>
+
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+const NS = "http://www.w3.org/2000/svg";
+const KEY = "diseno_habitacion_v1";
+
+// Catálogo (cm): w = ancho, d = fondo
+const CAT = {
+  "Dormitorio":[["Cama 90",90,200],["Cama 135",135,200],["Cama 150",150,200],["Cama 160",160,200],["Mesita noche",40,35],["Cómoda",100,45],["Armario 2 puertas",100,55],["Armario 3 puertas",150,55],["Armario 4 puertas",200,60],["Cuna",70,130]],
+  "Estudio":[["Escritorio 140",140,60],["Escritorio 120",120,60],["Silla",45,45],["Estantería",80,30],["Librería 2m",200,30],["Mesa de trabajo",160,80]],
+  "Salón":[["Sofá 2 plazas",160,90],["Sofá 3 plazas",210,90],["Mueble TV",150,40],["Mesa centro",100,50],["Butaca",80,80],["Mesa comedor",160,90]],
+  "Aperturas":[["Puerta 72",72,10,"door"],["Puerta 82",82,10,"door"],["Puerta 92",92,10,"door"],["Ventana 100",100,12,"window"],["Ventana 150",150,12,"window"]],
+  "Otros":[["Radiador",80,10],["Alfombra 160x230",160,230],["Pilar",30,30],["Bloque libre",100,100]]
+};
+const COLORS = {Dormitorio:"#7aa7e0",Estudio:"#e0b36a",Salón:"#8fc79a",Otros:"#b7a2d6",Aperturas:"#fff"};
+
+let S = {room:{w:400,h:300}, walls:[], items:[]};
+let tool="select", snapOn=true, sel=null, hist=[], fut=[], uid=1, drag=null, vb={x:-60,y:-60,w:520,h:420};
+
+/* ---------- estado / historial ---------- */
+const snapshot = () => JSON.stringify(S);
+function commit(){ hist.push(snapshot()); if(hist.length>200)hist.shift(); fut=[]; persist(); }
+function persist(){ try{localStorage.setItem(KEY,snapshot())}catch(e){} }
+function restore(j){ S=JSON.parse(j); sel=null; uid=1+Math.max(0,...S.items.map(i=>i.id),...S.walls.map(w=>w.id)); render(); }
+function undo(){ if(hist.length>1){ fut.push(hist.pop()); restore(hist[hist.length-1]); persist(); } }
+function redo(){ if(fut.length){ const j=fut.pop(); hist.push(j); restore(j); persist(); } }
+
+/* ---------- utilidades ---------- */
+const sn = v => snapOn ? Math.round(v/5)*5 : Math.round(v);
+const svg = $("#svg");
+function pt(e){ const p=svg.createSVGPoint(); p.x=e.clientX; p.y=e.clientY; const q=p.matrixTransform(svg.getScreenCTM().inverse()); return {x:q.x,y:q.y}; }
+const el = (n,a={},p) => { const e=document.createElementNS(NS,n); for(const k in a)e.setAttribute(k,a[k]); if(p)p.appendChild(e); return e; };
+const wLen = w => Math.hypot(w.x2-w.x1,w.y2-w.y1);
+const find = id => S.items.find(i=>i.id===id) || S.walls.find(w=>w.id===id);
+const isWall = o => o && "x1" in o;
+
+/* ---------- render ---------- */
+function render(){
+  const {w:RW,h:RH}=S.room, WT=12;
+  svg.setAttribute("viewBox",`${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
+  svg.textContent="";
+  // rejilla 50 cm
+  const g0=el("g",{},svg);
+  for(let x=Math.floor(vb.x/50)*50;x<vb.x+vb.w;x+=50) el("line",{x1:x,y1:vb.y,x2:x,y2:vb.y+vb.h,stroke:"currentColor","stroke-opacity":x%100?".05":".12"},g0);
+  for(let y=Math.floor(vb.y/50)*50;y<vb.y+vb.h;y+=50) el("line",{x1:vb.x,y1:y,x2:vb.x+vb.w,y2:y,stroke:"currentColor","stroke-opacity":y%100?".05":".12"},g0);
+  // habitación
+  el("rect",{x:-WT,y:-WT,width:RW+2*WT,height:RH+2*WT,fill:"var(--wall)"},svg);
+  el("rect",{x:0,y:0,width:RW,height:RH,fill:"var(--panel)"},svg);
+  dimLabel(svg,0,-WT-6,RW,0,`${RW} cm`);
+  dimLabel(svg,-WT-6,0,RH,-90,`${RH} cm`);
+  // tabiques
+  for(const w of S.walls) drawWall(w);
+  // mobiliario (aperturas al final para quedar sobre muros)
+  [...S.items].sort((a,b)=>(a.kind?1:0)-(b.kind?1:0)).forEach(drawItem);
+  if(drag&&drag.ghost){ const w=drag.ghost; drawWall(w,true); }
+  props(); hint();
+}
+function dimLabel(p,x,y,len,rot,text){
+  const t=el("text",{x:x+(rot?0:len/2),y:y+(rot?len/2:0),"text-anchor":"middle","font-size":11,fill:"currentColor","fill-opacity":".7",transform:`rotate(${rot} ${x+(rot?0:len/2)} ${y+(rot?len/2:0)})`},p); t.textContent=text;
+}
+function drawWall(w,ghost){
+  const g=el("g",{"data-id":w.id,opacity:ghost?.6:1},svg);
+  const a=Math.atan2(w.y2-w.y1,w.x2-w.x1)*180/Math.PI, L=wLen(w);
+  const r=el("rect",{x:0,y:-w.t/2,width:L,height:w.t,transform:`translate(${w.x1} ${w.y1}) rotate(${a})`,fill:"#b9a98f",stroke:sel===w.id?"var(--acc)":"#6f6451","stroke-width":sel===w.id?2:1},g);
+  // montantes cada 40 cm
+  for(let d=0;d<=L;d+=40) el("line",{x1:d,y1:-w.t/2,x2:d,y2:w.t/2,stroke:"#6f6451","stroke-width":.7,transform:`translate(${w.x1} ${w.y1}) rotate(${a})`},g);
+  const mx=(w.x1+w.x2)/2,my=(w.y1+w.y2)/2, ang=(a>90||a<-90)?a+180:a;
+  const t=el("text",{x:mx,y:my-w.t/2-4,"text-anchor":"middle","font-size":11,fill:"currentColor",transform:`rotate(${ang} ${mx} ${my})`},g);
+  t.textContent=Math.round(L)+" cm";
+  if(sel===w.id&&!ghost){ for(const [k,x,y] of [[1,w.x1,w.y1],[2,w.x2,w.y2]]) el("circle",{cx:x,cy:y,r:6,fill:"var(--acc)","data-h":k,"data-id":w.id,style:"cursor:move"},svg); }
+}
+function drawItem(it){
+  const g=el("g",{"data-id":it.id,transform:`translate(${it.x} ${it.y}) rotate(${it.rot}) scale(${it.fx?-1:1} ${it.fy?-1:1})`,style:"cursor:move"},svg);
+  const s=sel===it.id, stroke=s?"var(--acc)":"#00000066";
+  if(it.kind==="door"){
+    const w=it.w;
+    el("rect",{x:-w/2,y:-it.d/2-1,width:w,height:it.d+2,fill:"var(--panel)"},g);
+    el("path",{d:`M ${-w/2} 0 L ${-w/2} ${-w} A ${w} ${w} 0 0 1 ${w/2} 0 Z`,fill:"#2563eb14",stroke:stroke,"stroke-dasharray":"4 3"},g);
+    el("line",{x1:-w/2,y1:0,x2:-w/2,y2:-w,stroke:s?"var(--acc)":"#555","stroke-width":3},g);
+  } else if(it.kind==="window"){
+    el("rect",{x:-it.w/2,y:-it.d/2,width:it.w,height:it.d,fill:"#bfe3f5",stroke:stroke,"stroke-width":s?2:1},g);
+    el("line",{x1:-it.w/2,y1:0,x2:it.w/2,y2:0,stroke:"#4a90b8"},g);
+  } else {
+    el("rect",{x:-it.w/2,y:-it.d/2,width:it.w,height:it.d,fill:it.color,"fill-opacity":.75,stroke:stroke,"stroke-width":s?2.5:1,rx:2},g);
+  }
+  // etiqueta (sin espejar ni girar boca abajo)
+  const t=el("text",{x:0,y:it.kind==="door"?-it.w/2:0,"text-anchor":"middle","dominant-baseline":"middle","font-size":Math.max(7,Math.min(10,Math.min(it.w,it.d>30?it.w:999)/7)),fill:"#111","pointer-events":"none"},g);
+  t.setAttribute("transform",`scale(${it.fx?-1:1} ${it.fy?-1:1}) rotate(${-it.rot})`);
+  t.textContent=it.kind?"":`${it.name} ${it.w}×${it.d}`;
+  if(it.kind&&s){ t.textContent=`${it.name}`; }
+}
+
+/* ---------- paneles ---------- */
+function buildLib(){
+  const L=$("#lib"); L.innerHTML="<h3>Habitación (interior)</h3>";
+  const r=document.createElement("div");
+  r.innerHTML=`<div class="row"><label>Ancho cm</label><input id="rw" type="number" value="${S.room.w}"></div><div class="row"><label>Fondo cm</label><input id="rh" type="number" value="${S.room.h}"></div>`;
+  L.appendChild(r);
+  r.querySelectorAll("input").forEach(i=>i.onchange=()=>{ S.room.w=+$("#rw").value||S.room.w; S.room.h=+$("#rh").value||S.room.h; commit(); fit(); });
+  for(const [cat,list] of Object.entries(CAT)){
+    L.insertAdjacentHTML("beforeend",`<h3>${cat}</h3>`);
+    const g=document.createElement("div"); g.className="grid"; L.appendChild(g);
+    for(const [name,w,d,kind] of list){
+      const b=document.createElement("button"); b.innerHTML=`${name}<small>${w}×${d}</small>`;
+      b.onclick=()=>addItem({name,w,d,kind,color:COLORS[cat]});
+      g.appendChild(b);
+    }
+  }
+}
+function addItem(o){
+  const it={id:uid++,name:o.name,w:o.w,d:o.d,kind:o.kind||null,color:o.color||"#999",x:sn(S.room.w/2),y:sn(S.room.h/2),rot:0,fx:false,fy:false};
+  S.items.push(it); sel=it.id; commit(); render();
+}
+function props(){
+  const P=$("#props"), o=sel&&find(sel);
+  if(!o){ P.innerHTML=`<h3>Resumen</h3><p>${S.items.length} elementos · ${S.walls.length} tabiques</p><p style="color:var(--mut)">Selecciona algo o añade mobiliario del catálogo. Con «Dibujar tabique» arrastra sobre el plano para trazar montantes.</p>`; return; }
+  if(isWall(o)){
+    P.innerHTML=`<h3>Tabique</h3><div class="row"><label>Largo cm</label><input id="p-len" type="number" value="${Math.round(wLen(o))}"></div><div class="row"><label>Grosor cm</label><input id="p-t" type="number" value="${o.t}"></div><div class="btns"><button id="p-del">Eliminar</button></div>`;
+    $("#p-len").onchange=e=>{ const L=wLen(o)||1,k=(+e.target.value)/L; o.x2=o.x1+(o.x2-o.x1)*k; o.y2=o.y1+(o.y2-o.y1)*k; commit(); render(); };
+    $("#p-t").onchange=e=>{ o.t=Math.max(2,+e.target.value||o.t); commit(); render(); };
+  } else {
+    P.innerHTML=`<h3>${o.kind?"Apertura":"Elemento"}</h3>
+    <div class="row"><label>Nombre</label><input id="p-name" value="${o.name}"></div>
+    <div class="row"><label>Ancho cm</label><input id="p-w" type="number" value="${o.w}"></div>
+    <div class="row"><label>Fondo cm</label><input id="p-d" type="number" value="${o.d}"></div>
+    <div class="row"><label>X (centro)</label><input id="p-x" type="number" value="${Math.round(o.x)}"></div>
+    <div class="row"><label>Y (centro)</label><input id="p-y" type="number" value="${Math.round(o.y)}"></div>
+    <div class="row"><label>Giro °</label><input id="p-r" type="number" value="${o.rot}"></div>
+    ${o.kind?"":`<div class="row"><label>Color</label><input id="p-c" type="color" value="${o.color}"></div>`}
+    <div class="btns"><button id="p-rot">Girar 90° (R)</button><button id="p-fx">Espejo H</button><button id="p-fy">Espejo V</button><button id="p-dup">Duplicar</button><button id="p-del">Eliminar</button></div>`;
+    const bind=(id,f)=>{ const e=$(id); if(e) e.onchange=ev=>{ f(ev.target.value); commit(); render(); }; };
+    bind("#p-name",v=>o.name=v); bind("#p-w",v=>o.w=Math.max(5,+v||o.w)); bind("#p-d",v=>o.d=Math.max(5,+v||o.d));
+    bind("#p-x",v=>o.x=+v); bind("#p-y",v=>o.y=+v); bind("#p-r",v=>o.rot=((+v%360)+360)%360); bind("#p-c",v=>o.color=v);
+    $("#p-rot").onclick=()=>rot(o); $("#p-fx").onclick=()=>{o.fx=!o.fx;commit();render()}; $("#p-fy").onclick=()=>{o.fy=!o.fy;commit();render()};
+    $("#p-dup").onclick=()=>dup(o);
+  }
+  $("#p-del").onclick=del;
+}
+function rot(o){ o.rot=(o.rot+90)%360; commit(); render(); }
+function dup(o){ const c={...o,id:uid++,x:o.x+20,y:o.y+20}; S.items.push(c); sel=c.id; commit(); render(); }
+function del(){ if(!sel)return; S.items=S.items.filter(i=>i.id!==sel); S.walls=S.walls.filter(w=>w.id!==sel); sel=null; commit(); render(); }
+function hint(){ $("#hint").textContent = tool==="wall" ? "Arrastra para trazar un tabique (Alt = ángulo libre)" : "Arrastra elementos · R girar · Supr borrar · rueda = zoom · arrastrar fondo = mover vista"; }
+
+/* ---------- interacción ---------- */
+function setTool(t){ tool=t; $("#t-select").classList.toggle("on",t==="select"); $("#t-wall").classList.toggle("on",t==="wall"); hint(); }
+svg.addEventListener("pointerdown",e=>{
+  if(e.button===1||e.button===2){ e.preventDefault(); }
+  const p=pt(e), h=e.target.closest("[data-h]"), t=e.target.closest("[data-id]");
+  svg.setPointerCapture(e.pointerId);
+  if(tool==="wall"){ const q={x:sn(p.x),y:sn(p.y)}; drag={type:"newwall",a:q,ghost:{id:0,x1:q.x,y1:q.y,x2:q.x,y2:q.y,t:10}}; return; }
+  if(h){ drag={type:"handle",o:find(+h.dataset.id),k:+h.dataset.h}; return; }
+  if(t){ const o=find(+t.dataset.id); sel=o.id; drag=isWall(o)?{type:"movewall",o,p0:p,orig:{...o},moved:false}:{type:"move",o,dx:o.x-p.x,dy:o.y-p.y,moved:false}; render(); return; }
+  sel=null; drag={type:"pan",sx:e.clientX,sy:e.clientY,vb0:{...vb}}; render();
+});
+svg.addEventListener("pointermove",e=>{
+  if(!drag)return; const p=pt(e);
+  if(drag.type==="pan"){ const k=vb.w/svg.clientWidth; vb.x=drag.vb0.x-(e.clientX-drag.sx)*k; vb.y=drag.vb0.y-(e.clientY-drag.sy)*k; render(); return; }
+  if(drag.type==="newwall"){ let x=sn(p.x),y=sn(p.y); if(!e.altKey){ const dx=Math.abs(x-drag.a.x),dy=Math.abs(y-drag.a.y); if(dy<dx*.15)y=drag.a.y; else if(dx<dy*.15)x=drag.a.x; } Object.assign(drag.ghost,{x2:x,y2:y}); render(); return; }
+  if(drag.type==="move"){ drag.moved=true; drag.o.x=sn(p.x+drag.dx); drag.o.y=sn(p.y+drag.dy); render(); return; }
+  if(drag.type==="movewall"){ drag.moved=true; const o=drag.o,s=drag.orig,dx=sn(p.x-drag.p0.x),dy=sn(p.y-drag.p0.y); o.x1=s.x1+dx;o.y1=s.y1+dy;o.x2=s.x2+dx;o.y2=s.y2+dy; render(); return; }
+  if(drag.type==="handle"){ drag.moved=true; const o=drag.o; let x=sn(p.x),y=sn(p.y); const ox=drag.k===1?o.x2:o.x1, oy=drag.k===1?o.y2:o.y1; if(!e.altKey){ const dx=Math.abs(x-ox),dy=Math.abs(y-oy); if(dy<dx*.15)y=oy; else if(dx<dy*.15)x=ox; } if(drag.k===1){o.x1=x;o.y1=y}else{o.x2=x;o.y2=y} render(); }
+});
+svg.addEventListener("pointerup",()=>{
+  if(!drag)return; const d=drag; drag=null;
+  if(d.type==="newwall"){ const g=d.ghost; if(Math.hypot(g.x2-g.x1,g.y2-g.y1)>=10){ const w={id:uid++,x1:g.x1,y1:g.y1,x2:g.x2,y2:g.y2,t:10}; S.walls.push(w); sel=w.id; commit(); setTool("select"); } render(); return; }
+  if(d.moved) commit();
+  render();
+});
+svg.addEventListener("wheel",e=>{ e.preventDefault(); const p=pt(e),k=e.deltaY>0?1.12:1/1.12; vb.x=p.x-(p.x-vb.x)*k; vb.y=p.y-(p.y-vb.y)*k; vb.w*=k; vb.h*=k; render(); },{passive:false});
+svg.addEventListener("contextmenu",e=>e.preventDefault());
+addEventListener("keydown",e=>{
+  if(/INPUT|TEXTAREA/.test(document.activeElement.tagName))return;
+  const o=sel&&find(sel), k=e.key;
+  if((e.ctrlKey||e.metaKey)&&k.toLowerCase()==="z"){ e.preventDefault(); e.shiftKey?redo():undo(); }
+  else if((e.ctrlKey||e.metaKey)&&k.toLowerCase()==="y"){ e.preventDefault(); redo(); }
+  else if(k==="Delete"||k==="Backspace") del();
+  else if(k==="Escape"){ sel=null; setTool("select"); render(); }
+  else if(k.toLowerCase()==="r"&&o&&!isWall(o)) rot(o);
+  else if(k.toLowerCase()==="w") setTool("wall");
+  else if(k.toLowerCase()==="v") setTool("select");
+  else if(o&&k.startsWith("Arrow")){ e.preventDefault(); const s=e.shiftKey?10:1,dx=({ArrowLeft:-s,ArrowRight:s})[k]||0,dy=({ArrowUp:-s,ArrowDown:s})[k]||0;
+    if(isWall(o)){o.x1+=dx;o.x2+=dx;o.y1+=dy;o.y2+=dy}else{o.x+=dx;o.y+=dy} commit(); render(); }
+});
+
+/* ---------- cabecera ---------- */
+function fit(){ const m=60,r=S.room; const ar=svg.clientWidth/Math.max(1,svg.clientHeight)||1.5; let w=r.w+2*m,h=r.h+2*m; if(w/h<ar)w=h*ar; else h=w/ar; vb={x:r.w/2-w/2,y:r.h/2-h/2,w,h}; render(); }
+$("#t-select").onclick=()=>setTool("select"); $("#t-wall").onclick=()=>setTool("wall");
+$("#undo").onclick=undo; $("#redo").onclick=redo; $("#fit").onclick=fit;
+$("#snap").onclick=e=>{ snapOn=!snapOn; e.target.classList.toggle("on",snapOn); };
+$("#clear").onclick=()=>{ if(confirm("¿Vaciar el diseño (se conserva el tamaño de la habitación)?")){ S.items=[];S.walls=[];sel=null;commit();render(); } };
+$("#save").onclick=()=>download(new Blob([snapshot()],{type:"application/json"}),"habitacion.json");
+$("#load").onclick=()=>$("#file").click();
+$("#file").onchange=async e=>{ const f=e.target.files[0]; if(!f)return; try{ const j=JSON.parse(await f.text()); if(!j.room||!j.items||!j.walls)throw 0; S=j; restore(JSON.stringify(j)); commit(); buildLib(); fit(); }catch{ alert("Archivo no válido"); } e.target.value=""; };
+function download(blob,name){ const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); }
+$("#png").onclick=()=>{
+  const prev=sel; sel=null; const r=S.room,m=40; const saved={...vb}; vb={x:-m,y:-m,w:r.w+2*m,h:r.h+2*m}; render();
+  const c=svg.cloneNode(true); c.setAttribute("xmlns",NS); c.setAttribute("width",vb.w*2); c.setAttribute("height",vb.h*2);
+  const cs=getComputedStyle(document.body); const vars=["--bg","--panel","--ink","--wall"].map(v=>`${v}:${cs.getPropertyValue(v)}`).join(";");
+  c.setAttribute("style",`${vars};color:${cs.color};background:${cs.getPropertyValue("--bg")}`);
+  const img=new Image(); img.onload=()=>{ const cv=document.createElement("canvas"); cv.width=vb.w*2; cv.height=vb.h*2; const x=cv.getContext("2d"); x.fillStyle=cs.getPropertyValue("--bg"); x.fillRect(0,0,cv.width,cv.height); x.drawImage(img,0,0); cv.toBlob(b=>download(b,"habitacion.png")); vb=saved; sel=prev; render(); };
+  img.src="data:image/svg+xml;charset=utf-8,"+encodeURIComponent(new XMLSerializer().serializeToString(c));
+};
+
+/* ---------- init ---------- */
+(function init(){
+  let j=null; try{ j=localStorage.getItem(KEY); }catch{}
+  if(j){ try{ S=JSON.parse(j); }catch{} }
+  else { S.walls.push({id:uid++,x1:200,y1:0,x2:200,y2:300,t:10}); }
+  uid=1+Math.max(0,...S.items.map(i=>i.id),...S.walls.map(w=>w.id));
+  hist=[snapshot()]; buildLib(); fit(); addEventListener("resize",fit);
+})();
+</script>
+</body>
+</html>
